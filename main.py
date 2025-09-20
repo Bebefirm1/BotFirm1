@@ -8,6 +8,8 @@ from discord.ext import commands, tasks
 from typing import Optional, Dict, List, Union
 from abc import ABC, abstractmethod
 
+# keep_alive est souvent utilisé sur des plateformes comme Replit,
+# s'il n'est pas utilisé, cette ligne peut être commentée ou supprimée.
 from keep_alive import keep_alive
 load_dotenv()
 token = os.getenv('Token_bot')
@@ -530,11 +532,28 @@ async def price_monitor():
                             if role: content = f"{role.mention}"
                         await channel.send(content=content, embed=embed, view=view)
                     else:
-                        embed = discord.Embed(title="📢 Prix cible atteint !",
-                                              description=f"**{nom}** est à {info['prix_cible']}€ ou moins !",
-                                              color=discord.Color.green())
-                        embed.add_field(name="Lien", value=f"[Voir le produit]({info['url']})")
-                        await channel.send(embed=embed)
+                        # --- DÉBUT DE L'AJOUT ---
+                        # On prépare le message de notification avec la mention du rôle,
+                        # comme demandé.
+                        content = ""
+                        if config.get("notification_role"):
+                            role = guild.get_role(config["notification_role"])
+                            if role:
+                                content = role.mention
+
+                        # On crée un embed clair pour l'alerte de disponibilité.
+                        embed = discord.Embed(
+                            title="📢 Alerte : Produit Disponible !",
+                            description=f"Le produit **{nom}** est disponible au prix que vous souhaitiez !",
+                            color=discord.Color.blue()
+                        )
+                        embed.add_field(name="Prix Cible Atteint", value=f"**{info['prix_cible']}€**", inline=True)
+                        embed.add_field(name="Lien vers l'article", value=f"[🛒 Voir le produit]({info['url']})", inline=True)
+
+                        # On envoie le message avec la mention et l'embed.
+                        await channel.send(content=content, embed=embed)
+                        # --- FIN DE L'AJOUT ---
+
 
                     # Désactiver le produit pour éviter le spam de notifications
                     data["products"][nom]["actif"] = False
