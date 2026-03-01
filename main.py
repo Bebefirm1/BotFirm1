@@ -9,8 +9,9 @@ Dépendances :
 
 Configuration :
     Créez un fichier .env avec :  Token_bot=VOTRE_TOKEN_ICI
-    Créez un channel #ticket-logs et un rôle Support dans votre serveur.
     Placez keep_alive.py dans le même dossier (optionnel pour Replit).
+    Utilisez /config-tickets pour personnaliser le salon de logs et les rôles pingés.
+    Aucun rôle ni salon n'est requis par défaut — tout est configurable via les commandes.
 """
 
 import discord
@@ -31,9 +32,7 @@ token = os.getenv('Token_bot')
 #  Configuration
 # ─────────────────────────────────────────────
 
-TICKET_CATEGORY_NAME = "🎫 Tickets"
-TICKET_LOG_CHANNEL   = "ticket-logs"       # nom du salon de logs
-SUPPORT_ROLE_NAME    = "Support"           # rôle qui voit les tickets
+TICKET_CATEGORY_NAME = "🎫 Tickets"   # Nom de la catégorie créée automatiquement
 
 # Couleurs de la palette Mouren
 COLOR_PRIMARY   = 0x5865F2   # Blurple Discord
@@ -49,7 +48,7 @@ intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
 
-bot = commands.Bot(command_prefix="!", intents=intents)
+bot = commands.Bot(command_prefix="/", intents=intents)   # Toutes les commandes sont des slash commands (/)
 tree = bot.tree
 
 # Stockage simple des tickets (en mémoire)
@@ -331,12 +330,8 @@ class TicketCloseView(discord.ui.View):
             member_role_ids = [r.id for r in interaction.user.roles]
             is_staff = any(rid in member_role_ids for rid in ping_role_ids)
         if not is_staff:
-            # Fallback: rôle nommé "Support"
-            support_role = discord.utils.get(interaction.guild.roles, name=SUPPORT_ROLE_NAME)
-            is_staff = support_role and support_role in interaction.user.roles
-        if not is_staff:
             await interaction.response.send_message(
-                embed=mouren_embed("Accès refusé", "Seul le staff peut revendiquer un ticket.", color=COLOR_ERROR),
+                embed=mouren_embed("Accès refusé", "Seul le staff (rôles configurés ou admin) peut revendiquer un ticket.", color=COLOR_ERROR),
                 ephemeral=True,
             )
             return
@@ -426,13 +421,6 @@ async def _creer_ticket(interaction: discord.Interaction, raison: str = "Non sp�
             overwrites[role] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
             ping_mentions.append(role.mention)
 
-    # Fallback : rôle "Support" statique si aucun rôle configuré
-    if not ping_role_ids:
-        support_role = discord.utils.get(guild.roles, name=SUPPORT_ROLE_NAME)
-        if support_role:
-            overwrites[support_role] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
-            ping_mentions.append(support_role.mention)
-
     # Création du salon
     ticket_name = f"ticket-{user.name.lower().replace(' ', '-')}"
     channel = await category.create_text_channel(ticket_name, overwrites=overwrites)
@@ -478,7 +466,7 @@ async def _creer_ticket(interaction: discord.Interaction, raison: str = "Non sp�
 
     # Log dans le salon configuré
     log_channel_id = cfg.get("log_channel_id")
-    log_channel = guild.get_channel(log_channel_id) if log_channel_id else discord.utils.get(guild.text_channels, name=TICKET_LOG_CHANNEL)
+    log_channel = guild.get_channel(log_channel_id) if log_channel_id else None
     if log_channel:
         log_embed = mouren_embed(
             title="📥 Nouveau ticket ouvert",
@@ -517,7 +505,7 @@ async def _fermer_ticket(interaction: discord.Interaction):
 
     # Log de fermeture
     log_channel_id = cfg.get("log_channel_id")
-    log_channel = guild.get_channel(log_channel_id) if log_channel_id else discord.utils.get(guild.text_channels, name=TICKET_LOG_CHANNEL)
+    log_channel = guild.get_channel(log_channel_id) if log_channel_id else None
     if log_channel:
         opener = guild.get_member(user_id)
         log_embed = mouren_embed(
@@ -611,12 +599,12 @@ async def config_tickets(interaction: discord.Interaction):
     )
     embed.add_field(
         name="📋  Salon de logs actuel",
-        value=log_ch.mention if log_ch else "⚠️ Non configuré — utilise `#ticket-logs` par défaut",
+        value=log_ch.mention if log_ch else "❌ Non configuré — utilisez `/set-log-tickets #salon`",
         inline=False,
     )
     embed.add_field(
         name="🔔  Rôles pingés à l'ouverture",
-        value=" ".join(r.mention for r in ping_roles) if ping_roles else "⚠️ Aucun — utilise `@Support` par défaut",
+        value=" ".join(r.mention for r in ping_roles) if ping_roles else "❌ Aucun — utilisez `/ajouter-role-ticket @role`",
         inline=False,
     )
     embed.add_field(
@@ -725,8 +713,9 @@ async def reset_config_tickets(interaction: discord.Interaction):
         title="🔄 Configuration réinitialisée",
         description=(
             "La configuration des tickets a été remise à zéro.\n\n"
-            "• Salon de logs → `#ticket-logs` (par défaut)\n"
-            "• Rôles pingés → `@Support` (par défaut)"
+            "• Salon de logs → ❌ Non configuré\n"
+            "• Rôles pingés → ❌ Aucun\n\n"
+            "Utilisez `/set-log-tickets` et `/ajouter-role-ticket` pour reconfigurer."
         ),
         color=COLOR_WARNING,
     )
@@ -776,7 +765,7 @@ async def panel_tickets(interaction: discord.Interaction):
         name="🔔  Staff de support",
         value=(
             " ".join(r.mention for r in ping_roles)
-            if ping_roles else "@Support"
+            if ping_roles else "*Aucun rôle configuré*"
         ),
         inline=False,
     )
@@ -802,9 +791,9 @@ async def panel_tickets(interaction: discord.Interaction):
         description="Le panel de tickets a été créé avec succès.",
         color=COLOR_SUCCESS,
         fields=[
-            ("📁 Logs", log_ch.mention if log_ch else "`#ticket-logs` (défaut)", True),
+            ("📁 Logs", log_ch.mention if log_ch else "❌ Non configuré", True),
             ("🔔 Rôles pingés",
-             " ".join(r.mention for r in ping_roles) if ping_roles else "`@Support` (défaut)", True),
+             " ".join(r.mention for r in ping_roles) if ping_roles else "❌ Aucun configuré", True),
         ],
     )
     await interaction.response.send_message(embed=confirm_embed, ephemeral=True)
