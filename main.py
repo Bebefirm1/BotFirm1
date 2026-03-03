@@ -18,7 +18,11 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 from dotenv import load_dotenv
-from keep_alive import keep_alive
+try:
+    from keep_alive import keep_alive
+    KEEP_ALIVE_AVAILABLE = True
+except ImportError:
+    KEEP_ALIVE_AVAILABLE = False
 import random
 import asyncio
 import datetime
@@ -131,7 +135,11 @@ async def help_cmd(interaction: discord.Interaction):
                 "`/ticket <raison>` — Ouvrir un ticket\n"
                 "`/fermer` — Fermer votre ticket\n"
                 "`/ajouter <@user>` — Ajouter un utilisateur au ticket\n"
-                "`/retirer <@user>` — Retirer un utilisateur du ticket"
+                "`/retirer <@user>` — Retirer un utilisateur du ticket\n"
+                "`/panel-tickets` — Envoyer le panel *(admin)*\n"
+                "`/config-tickets` — Voir la configuration *(admin)*\n"
+                "`/ajouter-categorie-ticket` — Ajouter une catégorie *(admin)*\n"
+                "`/retirer-categorie-ticket` — Supprimer une catégorie *(admin)*"
             ), False),
             ("⚙️ **Config Tickets** *(Admin)*", (
                 "`/config-tickets` — Voir la configuration actuelle\n"
@@ -265,7 +273,7 @@ def set_guild_config(guild_id: int, key: str, value):
 # ─────────────────────────────────────────────
 
 class TicketReasonModal(discord.ui.Modal, title="📋 Ouvrir un ticket"):
-    """Modal pour saisir la raison du ticket."""
+    """Modal pour saisir la raison après avoir choisi la catégorie."""
 
     raison = discord.ui.TextInput(
         label="Raison de votre demande",
@@ -275,17 +283,55 @@ class TicketReasonModal(discord.ui.Modal, title="📋 Ouvrir un ticket"):
         required=True,
     )
 
-    categorie = discord.ui.TextInput(
-        label="Catégorie",
-        placeholder="Support, Bug, Question, Autre…",
-        max_length=50,
-        required=False,
-        default="Support général",
-    )
+    def __init__(self, categorie_label: str, category_id: int | None):
+        super().__init__(title=f"📋 Ticket — {categorie_label}")
+        self.categorie_label = categorie_label
+        self.category_id     = category_id
 
     async def on_submit(self, interaction: discord.Interaction):
-        raison_text = f"[{self.categorie.value or 'Support général'}] {self.raison.value}"
-        await _creer_ticket(interaction, raison=raison_text)
+        raison_text = f"[{self.categorie_label}] {self.raison.value}"
+        await _creer_ticket(interaction, raison=raison_text, category_id=self.category_id)
+
+
+class TicketCategorySelect(discord.ui.Select):
+    """Menu déroulant pour choisir la catégorie du ticket."""
+
+    def __init__(self, categories: list[dict]):
+        options = [
+            discord.SelectOption(
+                label=cat["label"],
+                description=cat.get("description", "")[:100],
+                emoji=cat.get("emoji", "🎫"),
+                value=str(i),
+            )
+            for i, cat in enumerate(categories)
+        ]
+        super().__init__(
+            placeholder="Choisissez une catégorie…",
+            min_values=1,
+            max_values=1,
+            options=options,
+            custom_id="ticket_category_select",
+        )
+        self.categories = categories
+
+    async def callback(self, interaction: discord.Interaction):
+        idx = int(self.values[0])
+        cat = self.categories[idx]
+        category_id = cat.get("discord_category_id")
+        modal = TicketReasonModal(
+            categorie_label=cat["label"],
+            category_id=category_id,
+        )
+        await interaction.response.send_modal(modal)
+
+
+class TicketCategoryView(discord.ui.View):
+    """Vue éphémère avec le select de catégorie."""
+
+    def __init__(self, categories: list[dict]):
+        super().__init__(timeout=60)
+        self.add_item(TicketCategorySelect(categories))
 
 
 class TicketCloseConfirmView(discord.ui.View):
@@ -359,8 +405,22 @@ class TicketOpenView(discord.ui.View):
         row=0,
     )
     async def open_ticket_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        modal = TicketReasonModal()
-        await interaction.response.send_modal(modal)
+        cfg        = get_guild_config(interaction.guild.id)
+        categories = cfg.get("ticket_categories", [])
+
+        if not categories:
+            # Aucune catégorie configurée → modal direct sans choix
+            modal = TicketReasonModal(categorie_label="Support général", category_id=None)
+            await interaction.response.send_modal(modal)
+        else:
+            # Affiche le select de catégories en éphémère
+            embed = mouren_embed(
+                title="Choisissez une catégorie",
+                description="Sélectionnez la catégorie correspondant à votre demande.",
+                color=COLOR_INFO,
+            )
+            view = TicketCategoryView(categories)
+            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
     @discord.ui.button(
         label="📖 Comment ça marche ?",
@@ -373,9 +433,10 @@ class TicketOpenView(discord.ui.View):
             title="Comment ouvrir un ticket ?",
             description=(
                 "**1.** Cliquez sur **🎫 Ouvrir un ticket**\n"
-                "**2.** Remplissez le formulaire (raison + catégorie)\n"
-                "**3.** Un salon privé sera créé pour vous\n"
-                "**4.** Le staff vous répondra dès que possible\n\n"
+                "**2.** Choisissez la catégorie de votre demande\n"
+                "**3.** Remplissez le formulaire (raison)\n"
+                "**4.** Un salon privé sera créé pour vous\n"
+                "**5.** Le staff vous répondra dès que possible\n\n"
                 "⚠️ *Un seul ticket par utilisateur. Merci d'être précis.*"
             ),
             color=COLOR_INFO,
@@ -383,7 +444,7 @@ class TicketOpenView(discord.ui.View):
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
-async def _creer_ticket(interaction: discord.Interaction, raison: str = "Non spécifiée"):
+async def _creer_ticket(interaction: discord.Interaction, raison: str = "Non spécifiée", category_id: int | None = None):
     guild = interaction.guild
     user  = interaction.user
     cfg   = get_guild_config(guild.id)
@@ -400,8 +461,14 @@ async def _creer_ticket(interaction: discord.Interaction, raison: str = "Non sp�
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
 
-    # Catégorie tickets
-    category = discord.utils.get(guild.categories, name=TICKET_CATEGORY_NAME)
+    # Catégorie Discord cible
+    # 1. Catégorie choisie par l'utilisateur (discord_category_id lié à la catégorie de ticket)
+    # 2. Sinon, catégorie par défaut "🎫 Tickets"
+    category = None
+    if category_id:
+        category = guild.get_channel(category_id)
+    if not category:
+        category = discord.utils.get(guild.categories, name=TICKET_CATEGORY_NAME)
     if not category:
         category = await guild.create_category(TICKET_CATEGORY_NAME)
 
@@ -576,44 +643,53 @@ async def retirer_cmd(interaction: discord.Interaction, membre: discord.Member):
 
 # ── Configuration des tickets ──────────────────
 
-@tree.command(name="config-tickets", description="[Admin] Configure les rôles et le salon des tickets")
+@tree.command(name="config-tickets", description="[Admin] Configure les rôles, le salon et les catégories de tickets")
 @app_commands.checks.has_permissions(administrator=True)
 async def config_tickets(interaction: discord.Interaction):
-    """Affiche le menu interactif de configuration des tickets."""
-    cfg = get_guild_config(interaction.guild.id)
+    cfg        = get_guild_config(interaction.guild.id)
+    log_ch_id  = cfg.get("log_channel_id")
+    ping_ids   = cfg.get("ping_roles", [])
+    categories = cfg.get("ticket_categories", [])
+    log_ch     = interaction.guild.get_channel(log_ch_id) if log_ch_id else None
+    ping_roles = [interaction.guild.get_role(rid) for rid in ping_ids if interaction.guild.get_role(rid)]
 
-    # Résumé actuel
-    log_ch_id   = cfg.get("log_channel_id")
-    ping_ids    = cfg.get("ping_roles", [])
-    log_ch      = interaction.guild.get_channel(log_ch_id) if log_ch_id else None
-    ping_roles  = [interaction.guild.get_role(rid) for rid in ping_ids if interaction.guild.get_role(rid)]
+    cats_value = ""
+    for cat in categories:
+        emoji    = cat.get("emoji", "🎫")
+        label    = cat["label"]
+        disc_cat = interaction.guild.get_channel(cat.get("discord_category_id")) if cat.get("discord_category_id") else None
+        cats_value += f"{emoji} **{label}** → {disc_cat.mention if disc_cat else '`🎫 Tickets` (défaut)'}\n"
 
     embed = discord.Embed(
         title="⚙️  Configuration — Tickets",
-        description=(
-            "Utilisez les commandes ci-dessous pour personnaliser le système de tickets.\n"
-            "Les changements sont **sauvegardés automatiquement** et persistent au redémarrage."
-        ),
+        description="Personnalisez le système de tickets. Les changements persistent au redémarrage.",
         color=COLOR_PRIMARY,
         timestamp=datetime.datetime.utcnow(),
     )
     embed.add_field(
-        name="📋  Salon de logs actuel",
-        value=log_ch.mention if log_ch else "❌ Non configuré — utilisez `/set-log-tickets #salon`",
+        name="📋  Salon de logs",
+        value=log_ch.mention if log_ch else "❌ Non configuré — `/set-log-tickets #salon`",
         inline=False,
     )
     embed.add_field(
-        name="🔔  Rôles pingés à l'ouverture",
-        value=" ".join(r.mention for r in ping_roles) if ping_roles else "❌ Aucun — utilisez `/ajouter-role-ticket @role`",
+        name="🔔  Rôles pingés",
+        value=" ".join(r.mention for r in ping_roles) if ping_roles else "❌ Aucun — `/ajouter-role-ticket @role`",
+        inline=False,
+    )
+    embed.add_field(
+        name="🗂️  Catégories de tickets",
+        value=cats_value if cats_value else "❌ Aucune — `/ajouter-categorie-ticket`",
         inline=False,
     )
     embed.add_field(
         name="🛠️  Commandes disponibles",
         value=(
-            "`/set-log-tickets #salon` — Définir le salon de logs\n"
-            "`/ajouter-role-ticket @role` — Ajouter un rôle pingSon\n"
+            "`/set-log-tickets #salon` — Salon de logs\n"
+            "`/ajouter-role-ticket @role` — Ajouter un rôle ping\n"
             "`/retirer-role-ticket @role` — Retirer un rôle ping\n"
-            "`/reset-config-tickets` — Remettre la config par défaut"
+            "`/ajouter-categorie-ticket` — Ajouter une catégorie de ticket\n"
+            "`/retirer-categorie-ticket` — Supprimer une catégorie de ticket\n"
+            "`/reset-config-tickets` — Tout réinitialiser"
         ),
         inline=False,
     )
@@ -701,6 +777,69 @@ async def remove_ping_role(interaction: discord.Interaction, role: discord.Role)
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
+@tree.command(name="ajouter-categorie-ticket", description="[Admin] Ajoute une categorie de ticket")
+@app_commands.describe(
+    label="Nom affiche dans le menu (ex: Support, Bug)",
+    categorie_discord="La categorie Discord cible pour ces tickets",
+    description="Description courte (optionnel)",
+    emoji="Emoji (optionnel)",
+)
+@app_commands.checks.has_permissions(administrator=True)
+async def add_ticket_category(
+    interaction: discord.Interaction,
+    label: str,
+    categorie_discord: discord.CategoryChannel,
+    description: str = "",
+    emoji: str = "🎫",
+):
+    cfg        = get_guild_config(interaction.guild.id)
+    categories = cfg.get("ticket_categories", [])
+    if any(c["label"].lower() == label.lower() for c in categories):
+        await interaction.response.send_message(
+            embed=mouren_embed("Deja existant", f"Une categorie **{label}** existe deja.", color=COLOR_WARNING),
+            ephemeral=True,
+        )
+        return
+    if len(categories) >= 25:
+        await interaction.response.send_message(
+            embed=mouren_embed("Limite atteinte", "Maximum 25 categories.", color=COLOR_ERROR),
+            ephemeral=True,
+        )
+        return
+    categories.append({"label": label, "description": description, "emoji": emoji, "discord_category_id": categorie_discord.id})
+    set_guild_config(interaction.guild.id, "ticket_categories", categories)
+    embed = mouren_embed(
+        title="Categorie ajoutee",
+        description=f"{emoji} **{label}** vers {categorie_discord.mention}",
+        color=COLOR_SUCCESS,
+        fields=[("Total", str(len(categories)), True), ("Description", description or "Aucune", True)],
+    )
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+
+@tree.command(name="retirer-categorie-ticket", description="[Admin] Supprime une categorie de ticket")
+@app_commands.describe(label="Nom exact de la categorie a supprimer")
+@app_commands.checks.has_permissions(administrator=True)
+async def remove_ticket_category(interaction: discord.Interaction, label: str):
+    cfg        = get_guild_config(interaction.guild.id)
+    categories = cfg.get("ticket_categories", [])
+    new_cats   = [c for c in categories if c["label"].lower() != label.lower()]
+    if len(new_cats) == len(categories):
+        await interaction.response.send_message(
+            embed=mouren_embed("Introuvable", f"Aucune categorie nommee **{label}**.", color=COLOR_WARNING),
+            ephemeral=True,
+        )
+        return
+    set_guild_config(interaction.guild.id, "ticket_categories", new_cats)
+    embed = mouren_embed(
+        title="Categorie supprimee",
+        description=f"**{label}** a ete retiree du menu.",
+        color=COLOR_SUCCESS,
+        fields=[("Restantes", str(len(new_cats)), True)],
+    )
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+
 @tree.command(name="reset-config-tickets", description="[Admin] Remet la configuration des tickets par défaut")
 @app_commands.checks.has_permissions(administrator=True)
 async def reset_config_tickets(interaction: discord.Interaction):
@@ -753,14 +892,7 @@ async def panel_tickets(interaction: discord.Interaction):
         ),
         inline=True,
     )
-    embed.add_field(
-        name="⏰  Disponibilité",
-        value=(
-            "🟢 **Lun — Ven**\n`09h00 → 22h00`\n\n"
-            "🟡 **Sam — Dim**\n`12h00 → 20h00`"
-        ),
-        inline=True,
-    )
+
     embed.add_field(
         name="🔔  Staff de support",
         value=(
@@ -1089,12 +1221,15 @@ async def on_app_command_error(interaction: discord.Interaction, error: app_comm
 #  Lancement
 # ─────────────────────────────────────────────
 if __name__ == "__main__":
-    keep_alive()
+    # keep_alive() uniquement si le module est disponible (Replit)
+    # Sur Render, le process tourne nativement en continu — inutile
+    if KEEP_ALIVE_AVAILABLE:
+        keep_alive()
     # Lancement du bot
     try:
         token = os.environ['Token_bot']
         bot.run(token)
     except KeyError:
-        print("❌ Token introuvable ! Vérifiez votre fichier .env ou vos secrets Replit.")
+        print("❌ Token introuvable ! Ajoutez Token_bot dans les variables d'environnement Render.")
     except discord.LoginFailure:
         print("❌ Token invalide ! Vérifiez votre token Discord.")
