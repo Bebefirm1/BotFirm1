@@ -1,4 +1,4 @@
-"""
+""" 
 ╔══════════════════════════════════════════════════════════╗
 ║          🤖 MOUREN — Discord Multi-Fonctions          ║
 ║     Tickets • Mini-Jeux • Modération • Embeds stylés     ║
