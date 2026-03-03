@@ -1,15 +1,18 @@
-""" 
+"""
 ╔══════════════════════════════════════════════════════════╗
-║          🤖 MOUREN — Discord Multi-Fonctions          ║
-║     Tickets • Mini-Jeux • Modération • Embeds stylés     ║
+║           🎮 FIRM1 — Bot de Gestion Discord             ║
+║          Tickets • Support • Mini-Jeux • Utilitaires     ║
 ╚══════════════════════════════════════════════════════════╝
 
+Firm1 est le bot officiel de gestion de la communauté gaming Firm1.
+Il centralise le support via un système de tickets structuré,
+propose des mini-jeux et des outils d'administration.
+
 Dépendances :
-    pip install discord.py python-dotenv
+    pip install discord.py python-dotenv flask
 
 Configuration :
     Créez un fichier .env avec :  Token_bot=VOTRE_TOKEN_ICI
-    Placez keep_alive.py dans le même dossier (optionnel pour Replit).
     Utilisez /config-tickets pour personnaliser le salon de logs et les rôles pingés.
     Aucun rôle ni salon n'est requis par défaut — tout est configurable via les commandes.
 """
@@ -38,7 +41,7 @@ token = os.getenv('Token_bot')
 
 TICKET_CATEGORY_NAME = "🎫 Tickets"   # Nom de la catégorie créée automatiquement
 
-# Couleurs de la palette Mouren
+# Couleurs de la palette Firm1
 COLOR_PRIMARY   = 0x5865F2   # Blurple Discord
 COLOR_SUCCESS   = 0x57F287   # Vert
 COLOR_WARNING   = 0xFEE75C   # Jaune
@@ -61,7 +64,7 @@ open_tickets: dict[int, dict] = {}   # user_id -> {channel_id, created_at, reaso
 # ─────────────────────────────────────────────
 #  Helpers Embed
 # ─────────────────────────────────────────────
-def mouren_embed(
+def firm1_embed(
     title: str,
     description: str,
     color: int = COLOR_PRIMARY,
@@ -69,7 +72,7 @@ def mouren_embed(
     thumbnail: str | None = None,
     fields: list[tuple[str, str, bool]] | None = None,
 ) -> discord.Embed:
-    """Crée un embed stylisé aux couleurs de Mouren."""
+    """Crée un embed stylisé aux couleurs de Firm1."""
     embed = discord.Embed(
         title=f"✦ {title}",
         description=description,
@@ -77,7 +80,7 @@ def mouren_embed(
         timestamp=datetime.datetime.utcnow(),
     )
     embed.set_footer(
-        text=footer or "Mouren • mouren.bot",
+        text=footer or "Firm1 Bot • Support Gaming",
         icon_url="https://cdn.discordapp.com/emojis/1234567890.png",  # Remplacez par votre icône
     )
     if thumbnail:
@@ -97,10 +100,10 @@ async def on_ready():
     await bot.change_presence(
         activity=discord.Activity(
             type=discord.ActivityType.watching,
-            name="⚡ /help pour commencer"
+            name="🎮 /help • Support Firm1"
         )
     )
-    print(f"✅ Mouren connecté en tant que {bot.user} (ID: {bot.user.id})")
+    print(f"✅ Firm1 connecté en tant que {bot.user} (ID: {bot.user.id})")
     print(f"📋 Serveurs : {len(bot.guilds)}")
 
 
@@ -108,12 +111,12 @@ async def on_ready():
 async def on_guild_join(guild: discord.Guild):
     for channel in guild.text_channels:
         if channel.permissions_for(guild.me).send_messages:
-            embed = mouren_embed(
-                title="Mouren est arrivé !",
+            embed = firm1_embed(
+                title="Firm1 Bot est opérationnel !",
                 description=(
-                    "Merci de m'avoir invité sur ce serveur ✨\n\n"
-                    "Tapez `/help` pour voir toutes les commandes disponibles.\n"
-                    "Configurez les permissions du rôle **Support** pour gérer les tickets."
+                    "**Firm1** est désormais actif sur ce serveur. 🎮\n\n"
+                    "Utilisez `/help` pour consulter toutes les commandes disponibles.\n"
+                    "Configurez le système de tickets avec `/config-tickets`."
                 ),
                 color=COLOR_SUCCESS,
             )
@@ -124,11 +127,14 @@ async def on_guild_join(guild: discord.Guild):
 # ─────────────────────────────────────────────
 #  COMMANDES GÉNÉRALES
 # ─────────────────────────────────────────────
-@tree.command(name="help", description="Affiche l'aide complète de Mouren")
+@tree.command(name="help", description="Affiche l'aide complète de Firm1 Bot")
 async def help_cmd(interaction: discord.Interaction):
-    embed = mouren_embed(
-        title="Aide — Mouren",
-        description="Voici toutes les commandes disponibles, classées par catégorie.",
+    embed = firm1_embed(
+        title="Firm1 Bot — Référence des commandes",
+        description=(
+            "Bienvenue dans le système de support **Firm1**.\n"
+            "Toutes les commandes sont accessibles via le préfixe `/`."
+        ),
         color=COLOR_PRIMARY,
         fields=[
             ("🎫 **Tickets**", (
@@ -173,7 +179,7 @@ async def ping_cmd(interaction: discord.Interaction):
     latency = round(bot.latency * 1000)
     color = COLOR_SUCCESS if latency < 100 else (COLOR_WARNING if latency < 200 else COLOR_ERROR)
     status = "🟢 Excellent" if latency < 100 else ("🟡 Correct" if latency < 200 else "🔴 Élevé")
-    embed = mouren_embed(
+    embed = firm1_embed(
         title="Pong !",
         description=f"**Latence WebSocket :** `{latency} ms`\n**Statut :** {status}",
         color=color,
@@ -184,7 +190,7 @@ async def ping_cmd(interaction: discord.Interaction):
 @tree.command(name="info-serveur", description="Informations sur le serveur")
 async def server_info(interaction: discord.Interaction):
     guild = interaction.guild
-    embed = mouren_embed(
+    embed = firm1_embed(
         title=f"Serveur — {guild.name}",
         description=guild.description or "Aucune description.",
         color=COLOR_INFO,
@@ -207,7 +213,7 @@ async def server_info(interaction: discord.Interaction):
 async def user_info(interaction: discord.Interaction, membre: discord.Member | None = None):
     membre = membre or interaction.user
     roles = [r.mention for r in membre.roles if r.name != "@everyone"]
-    embed = mouren_embed(
+    embed = firm1_embed(
         title=f"Utilisateur — {membre.display_name}",
         description=f"**Tag :** {membre}\n**ID :** `{membre.id}`",
         color=COLOR_INFO,
@@ -225,7 +231,7 @@ async def user_info(interaction: discord.Interaction, membre: discord.Member | N
 @app_commands.describe(membre="L'utilisateur (optionnel)")
 async def avatar_cmd(interaction: discord.Interaction, membre: discord.Member | None = None):
     membre = membre or interaction.user
-    embed = mouren_embed(
+    embed = firm1_embed(
         title=f"Avatar de {membre.display_name}",
         description=f"[Ouvrir en plein écran]({membre.display_avatar.url})",
         color=COLOR_INFO,
@@ -346,7 +352,7 @@ class TicketCloseConfirmView(discord.ui.View):
 
     @discord.ui.button(label="❌ Annuler", style=discord.ButtonStyle.secondary, custom_id="cancel_close")
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
-        embed = mouren_embed("Fermeture annulée", "Le ticket reste ouvert.", color=COLOR_SUCCESS)
+        embed = firm1_embed("Fermeture annulée", "Le ticket reste ouvert.", color=COLOR_SUCCESS)
         await interaction.response.send_message(embed=embed, ephemeral=True)
         self.stop()
 
@@ -359,7 +365,7 @@ class TicketCloseView(discord.ui.View):
 
     @discord.ui.button(label="🔒 Fermer le ticket", style=discord.ButtonStyle.danger, custom_id="close_ticket")
     async def close_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
-        embed = mouren_embed(
+        embed = firm1_embed(
             title="Confirmation",
             description="Êtes-vous sûr de vouloir fermer ce ticket ?",
             color=COLOR_WARNING,
@@ -377,11 +383,11 @@ class TicketCloseView(discord.ui.View):
             is_staff = any(rid in member_role_ids for rid in ping_role_ids)
         if not is_staff:
             await interaction.response.send_message(
-                embed=mouren_embed("Accès refusé", "Seul le staff (rôles configurés ou admin) peut revendiquer un ticket.", color=COLOR_ERROR),
+                embed=firm1_embed("Accès refusé", "Seul le staff (rôles configurés ou admin) peut revendiquer un ticket.", color=COLOR_ERROR),
                 ephemeral=True,
             )
             return
-        embed = mouren_embed(
+        embed = firm1_embed(
             title="Ticket revendiqué 📌",
             description=f"Ce ticket est maintenant géré par {interaction.user.mention}.",
             color=COLOR_SUCCESS,
@@ -414,7 +420,7 @@ class TicketOpenView(discord.ui.View):
             await interaction.response.send_modal(modal)
         else:
             # Affiche le select de catégories en éphémère
-            embed = mouren_embed(
+            embed = firm1_embed(
                 title="Choisissez une catégorie",
                 description="Sélectionnez la catégorie correspondant à votre demande.",
                 color=COLOR_INFO,
@@ -429,7 +435,7 @@ class TicketOpenView(discord.ui.View):
         row=0,
     )
     async def info_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        embed = mouren_embed(
+        embed = firm1_embed(
             title="Comment ouvrir un ticket ?",
             description=(
                 "**1.** Cliquez sur **🎫 Ouvrir un ticket**\n"
@@ -453,7 +459,7 @@ async def _creer_ticket(interaction: discord.Interaction, raison: str = "Non sp�
     if user.id in open_tickets:
         ch = guild.get_channel(open_tickets[user.id]["channel_id"])
         if ch:
-            embed = mouren_embed(
+            embed = firm1_embed(
                 title="Ticket déjà ouvert",
                 description=f"Vous avez déjà un ticket ouvert : {ch.mention}",
                 color=COLOR_WARNING,
@@ -516,7 +522,7 @@ async def _creer_ticket(interaction: discord.Interaction, raison: str = "Non sp�
     if ping_mentions:
         embed.add_field(name="🔔 Staff notifié", value=" ".join(ping_mentions), inline=False)
     embed.set_thumbnail(url=user.display_avatar.url)
-    embed.set_footer(text="Mouren • Support")
+    embed.set_footer(text="Firm1 • Support")
     view = TicketCloseView()
 
     # Ping du staff + embed
@@ -524,7 +530,7 @@ async def _creer_ticket(interaction: discord.Interaction, raison: str = "Non sp�
     await channel.send(content=f"{user.mention} {ping_content}".strip(), embed=embed, view=view)
 
     # Confirmation ephemeral
-    confirm = mouren_embed(
+    confirm = firm1_embed(
         title="Ticket créé !",
         description=f"Votre ticket est disponible ici : {channel.mention}",
         color=COLOR_SUCCESS,
@@ -535,7 +541,7 @@ async def _creer_ticket(interaction: discord.Interaction, raison: str = "Non sp�
     log_channel_id = cfg.get("log_channel_id")
     log_channel = guild.get_channel(log_channel_id) if log_channel_id else None
     if log_channel:
-        log_embed = mouren_embed(
+        log_embed = firm1_embed(
             title="📥 Nouveau ticket ouvert",
             description=f"**Canal :** {channel.mention}\n**Raison :** {raison}",
             color=COLOR_INFO,
@@ -559,11 +565,11 @@ async def _fermer_ticket(interaction: discord.Interaction):
             break
 
     if user_id is None:
-        embed = mouren_embed("Erreur", "Ce salon n'est pas un ticket.", color=COLOR_ERROR)
+        embed = firm1_embed("Erreur", "Ce salon n'est pas un ticket.", color=COLOR_ERROR)
         await interaction.response.send_message(embed=embed, ephemeral=True)
         return
 
-    embed = mouren_embed(
+    embed = firm1_embed(
         title="Ticket en cours de fermeture…",
         description="Ce salon sera supprimé dans **5 secondes**.",
         color=COLOR_WARNING,
@@ -575,7 +581,7 @@ async def _fermer_ticket(interaction: discord.Interaction):
     log_channel = guild.get_channel(log_channel_id) if log_channel_id else None
     if log_channel:
         opener = guild.get_member(user_id)
-        log_embed = mouren_embed(
+        log_embed = firm1_embed(
             title="📤 Ticket fermé",
             description=f"**Canal :** #{channel.name}\n**Fermé par :** {interaction.user.mention}",
             color=COLOR_ERROR,
@@ -608,12 +614,12 @@ async def ajouter_cmd(interaction: discord.Interaction, membre: discord.Member):
     is_ticket = any(d["channel_id"] == channel.id for d in open_tickets.values())
     if not is_ticket:
         await interaction.response.send_message(
-            embed=mouren_embed("Erreur", "Cette commande doit être utilisée dans un ticket.", color=COLOR_ERROR),
+            embed=firm1_embed("Erreur", "Cette commande doit être utilisée dans un ticket.", color=COLOR_ERROR),
             ephemeral=True,
         )
         return
     await channel.set_permissions(membre, read_messages=True, send_messages=True)
-    embed = mouren_embed(
+    embed = firm1_embed(
         title="Utilisateur ajouté",
         description=f"{membre.mention} a été ajouté à ce ticket.",
         color=COLOR_SUCCESS,
@@ -628,12 +634,12 @@ async def retirer_cmd(interaction: discord.Interaction, membre: discord.Member):
     is_ticket = any(d["channel_id"] == channel.id for d in open_tickets.values())
     if not is_ticket:
         await interaction.response.send_message(
-            embed=mouren_embed("Erreur", "Cette commande doit être utilisée dans un ticket.", color=COLOR_ERROR),
+            embed=firm1_embed("Erreur", "Cette commande doit être utilisée dans un ticket.", color=COLOR_ERROR),
             ephemeral=True,
         )
         return
     await channel.set_permissions(membre, overwrite=None)
-    embed = mouren_embed(
+    embed = firm1_embed(
         title="Utilisateur retiré",
         description=f"{membre.mention} a été retiré de ce ticket.",
         color=COLOR_WARNING,
@@ -693,7 +699,7 @@ async def config_tickets(interaction: discord.Interaction):
         ),
         inline=False,
     )
-    embed.set_footer(text=f"Mouren • Config de {interaction.guild.name}")
+    embed.set_footer(text=f"Firm1 • Config de {interaction.guild.name}")
     embed.set_thumbnail(url=interaction.guild.icon.url if interaction.guild.icon else None)
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
@@ -703,7 +709,7 @@ async def config_tickets(interaction: discord.Interaction):
 @app_commands.checks.has_permissions(administrator=True)
 async def set_log_tickets(interaction: discord.Interaction, salon: discord.TextChannel):
     set_guild_config(interaction.guild.id, "log_channel_id", salon.id)
-    embed = mouren_embed(
+    embed = firm1_embed(
         title="✅ Salon de logs mis à jour",
         description=f"Les logs de tickets seront désormais envoyés dans {salon.mention}.",
         color=COLOR_SUCCESS,
@@ -720,7 +726,7 @@ async def add_ping_role(interaction: discord.Interaction, role: discord.Role):
     ping_ids = cfg.get("ping_roles", [])
     if role.id in ping_ids:
         await interaction.response.send_message(
-            embed=mouren_embed(
+            embed=firm1_embed(
                 "Déjà présent",
                 f"{role.mention} est déjà dans la liste des rôles pingés.",
                 color=COLOR_WARNING,
@@ -733,7 +739,7 @@ async def add_ping_role(interaction: discord.Interaction, role: discord.Role):
 
     # Afficher la liste complète mise à jour
     all_roles = [interaction.guild.get_role(rid) for rid in ping_ids if interaction.guild.get_role(rid)]
-    embed = mouren_embed(
+    embed = firm1_embed(
         title="✅ Rôle ping ajouté",
         description=f"{role.mention} sera désormais pingé à chaque nouveau ticket.",
         color=COLOR_SUCCESS,
@@ -753,7 +759,7 @@ async def remove_ping_role(interaction: discord.Interaction, role: discord.Role)
     ping_ids = cfg.get("ping_roles", [])
     if role.id not in ping_ids:
         await interaction.response.send_message(
-            embed=mouren_embed(
+            embed=firm1_embed(
                 "Introuvable",
                 f"{role.mention} n'est pas dans la liste des rôles pingés.",
                 color=COLOR_WARNING,
@@ -765,7 +771,7 @@ async def remove_ping_role(interaction: discord.Interaction, role: discord.Role)
     set_guild_config(interaction.guild.id, "ping_roles", ping_ids)
 
     all_roles = [interaction.guild.get_role(rid) for rid in ping_ids if interaction.guild.get_role(rid)]
-    embed = mouren_embed(
+    embed = firm1_embed(
         title="✅ Rôle ping retiré",
         description=f"{role.mention} ne sera plus pingé à l'ouverture d'un ticket.",
         color=COLOR_SUCCESS,
@@ -796,19 +802,19 @@ async def add_ticket_category(
     categories = cfg.get("ticket_categories", [])
     if any(c["label"].lower() == label.lower() for c in categories):
         await interaction.response.send_message(
-            embed=mouren_embed("Deja existant", f"Une categorie **{label}** existe deja.", color=COLOR_WARNING),
+            embed=firm1_embed("Deja existant", f"Une categorie **{label}** existe deja.", color=COLOR_WARNING),
             ephemeral=True,
         )
         return
     if len(categories) >= 25:
         await interaction.response.send_message(
-            embed=mouren_embed("Limite atteinte", "Maximum 25 categories.", color=COLOR_ERROR),
+            embed=firm1_embed("Limite atteinte", "Maximum 25 categories.", color=COLOR_ERROR),
             ephemeral=True,
         )
         return
     categories.append({"label": label, "description": description, "emoji": emoji, "discord_category_id": categorie_discord.id})
     set_guild_config(interaction.guild.id, "ticket_categories", categories)
-    embed = mouren_embed(
+    embed = firm1_embed(
         title="Categorie ajoutee",
         description=f"{emoji} **{label}** vers {categorie_discord.mention}",
         color=COLOR_SUCCESS,
@@ -826,12 +832,12 @@ async def remove_ticket_category(interaction: discord.Interaction, label: str):
     new_cats   = [c for c in categories if c["label"].lower() != label.lower()]
     if len(new_cats) == len(categories):
         await interaction.response.send_message(
-            embed=mouren_embed("Introuvable", f"Aucune categorie nommee **{label}**.", color=COLOR_WARNING),
+            embed=firm1_embed("Introuvable", f"Aucune categorie nommee **{label}**.", color=COLOR_WARNING),
             ephemeral=True,
         )
         return
     set_guild_config(interaction.guild.id, "ticket_categories", new_cats)
-    embed = mouren_embed(
+    embed = firm1_embed(
         title="Categorie supprimee",
         description=f"**{label}** a ete retiree du menu.",
         color=COLOR_SUCCESS,
@@ -848,7 +854,7 @@ async def reset_config_tickets(interaction: discord.Interaction):
     if gid in cfg:
         del cfg[gid]
         _save_config(cfg)
-    embed = mouren_embed(
+    embed = firm1_embed(
         title="🔄 Configuration réinitialisée",
         description=(
             "La configuration des tickets a été remise à zéro.\n\n"
@@ -871,12 +877,12 @@ async def panel_tickets(interaction: discord.Interaction):
     log_ch     = interaction.guild.get_channel(log_ch_id) if log_ch_id else None
 
     embed = discord.Embed(
-        title="🎫  Centre de Support — Mouren",
+        title="🎫  Support — Firm1",
         description=(
             "```\n"
-            "  Besoin d'aide ? Notre équipe est là pour vous.\n"
-            "  Cliquez sur le bouton ci-dessous pour créer\n"
-            "  votre ticket de support privé.\n"
+            "  Vous rencontrez un problème sur le serveur ?\n"
+            "  Ouvrez un ticket et notre équipe de support\n"
+            "  vous répondra dans les meilleurs délais.\n"
             "```"
         ),
         color=COLOR_PRIMARY,
@@ -911,14 +917,14 @@ async def panel_tickets(interaction: discord.Interaction):
         ),
         inline=False,
     )
-    embed.set_footer(text=f"Mouren • {interaction.guild.name}")
+    embed.set_footer(text=f"Firm1 • {interaction.guild.name}")
     embed.set_thumbnail(url=interaction.guild.icon.url if interaction.guild.icon else None)
 
     view = TicketOpenView()
     await interaction.channel.send(embed=embed, view=view)
 
     # Résumé de config pour l'admin
-    confirm_embed = mouren_embed(
+    confirm_embed = firm1_embed(
         title="✅ Panel envoyé !",
         description="Le panel de tickets a été créé avec succès.",
         color=COLOR_SUCCESS,
@@ -939,7 +945,7 @@ async def panel_tickets(interaction: discord.Interaction):
 @tree.command(name="pile-ou-face", description="Lance une pièce")
 async def coin_flip(interaction: discord.Interaction):
     result = random.choice(["🪙 Pile", "🪙 Face"])
-    embed = mouren_embed(
+    embed = firm1_embed(
         title="Pile ou Face ?",
         description=f"La pièce a atterri sur… **{result}** !",
         color=random.choice([COLOR_SUCCESS, COLOR_WARNING]),
@@ -953,12 +959,12 @@ async def coin_flip(interaction: discord.Interaction):
 async def dice_roll(interaction: discord.Interaction, faces: int = 6):
     if faces < 2:
         await interaction.response.send_message(
-            embed=mouren_embed("Erreur", "Le dé doit avoir au moins 2 faces.", color=COLOR_ERROR),
+            embed=firm1_embed("Erreur", "Le dé doit avoir au moins 2 faces.", color=COLOR_ERROR),
             ephemeral=True,
         )
         return
     result = random.randint(1, faces)
-    embed = mouren_embed(
+    embed = firm1_embed(
         title=f"🎲 Dé à {faces} faces",
         description=f"Résultat : **{result}**",
         color=COLOR_INFO,
@@ -988,7 +994,7 @@ async def rps(interaction: discord.Interaction, choix: app_commands.Choice[str])
     else:
         result, color = "Vous perdez… 😢", COLOR_ERROR
 
-    embed = mouren_embed(
+    embed = firm1_embed(
         title="Pierre-Papier-Ciseaux",
         description=result,
         color=color,
@@ -1020,7 +1026,7 @@ EIGHTBALL_REPLIES = [
 @app_commands.describe(question="Votre question")
 async def eightball(interaction: discord.Interaction, question: str):
     answer, color = random.choice(EIGHTBALL_REPLIES)
-    embed = mouren_embed(
+    embed = firm1_embed(
         title="🎱 Boule Magique",
         description=answer,
         color=color,
@@ -1037,14 +1043,14 @@ active_guess_games: dict[int, int] = {}   # channel_id -> number
 async def guess_number(interaction: discord.Interaction, maximum: int = 100):
     channel_id = interaction.channel_id
     if channel_id in active_guess_games:
-        embed = mouren_embed("Partie en cours", "Une partie est déjà en cours dans ce salon.", color=COLOR_WARNING)
+        embed = firm1_embed("Partie en cours", "Une partie est déjà en cours dans ce salon.", color=COLOR_WARNING)
         await interaction.response.send_message(embed=embed, ephemeral=True)
         return
 
     number = random.randint(1, maximum)
     active_guess_games[channel_id] = number
 
-    embed = mouren_embed(
+    embed = firm1_embed(
         title="🔢 Devinez le nombre !",
         description=(
             f"J'ai choisi un nombre entre **1** et **{maximum}**.\n"
@@ -1064,7 +1070,7 @@ async def guess_number(interaction: discord.Interaction, maximum: int = 100):
 
             if guess == number:
                 del active_guess_games[channel_id]
-                win_embed = mouren_embed(
+                win_embed = firm1_embed(
                     title="🎉 Bonne réponse !",
                     description=f"{msg.author.mention} a trouvé le nombre **{number}** !",
                     color=COLOR_SUCCESS,
@@ -1072,16 +1078,16 @@ async def guess_number(interaction: discord.Interaction, maximum: int = 100):
                 await msg.channel.send(embed=win_embed)
                 break
             elif guess < number:
-                hint = mouren_embed("💡 Trop petit !", f"Le nombre est **plus grand** que {guess}.", color=COLOR_WARNING)
+                hint = firm1_embed("💡 Trop petit !", f"Le nombre est **plus grand** que {guess}.", color=COLOR_WARNING)
                 await msg.channel.send(embed=hint, delete_after=5)
             else:
-                hint = mouren_embed("💡 Trop grand !", f"Le nombre est **plus petit** que {guess}.", color=COLOR_WARNING)
+                hint = firm1_embed("💡 Trop grand !", f"Le nombre est **plus petit** que {guess}.", color=COLOR_WARNING)
                 await msg.channel.send(embed=hint, delete_after=5)
 
     except asyncio.TimeoutError:
         if channel_id in active_guess_games:
             del active_guess_games[channel_id]
-        timeout_embed = mouren_embed(
+        timeout_embed = firm1_embed(
             title="⏰ Temps écoulé !",
             description=f"Le nombre était **{number}**. Retentez votre chance !",
             color=COLOR_ERROR,
@@ -1147,7 +1153,7 @@ async def trivia(interaction: discord.Interaction):
     letters = ["🇦", "🇧", "🇨", "🇩"]
     options_text = "\n".join(f"{letters[i]} {opt}" for i, opt in enumerate(q["options"]))
 
-    embed = mouren_embed(
+    embed = firm1_embed(
         title="🧠 Trivia !",
         description=f"**{q['question']}**\n\n{options_text}\n\nRépondez avec **A**, **B**, **C** ou **D**. Vous avez **20 secondes** !",
         color=COLOR_INFO,
@@ -1166,13 +1172,13 @@ async def trivia(interaction: discord.Interaction):
         user_index = ["A", "B", "C", "D"].index(msg.content.upper())
 
         if user_index == q["correct"]:
-            result_embed = mouren_embed(
+            result_embed = firm1_embed(
                 title="✅ Bonne réponse !",
                 description=f"La réponse était bien **{q['options'][q['correct']]}** ! 🎉",
                 color=COLOR_SUCCESS,
             )
         else:
-            result_embed = mouren_embed(
+            result_embed = firm1_embed(
                 title="❌ Mauvaise réponse !",
                 description=f"La bonne réponse était **{q['options'][q['correct']]}**.",
                 color=COLOR_ERROR,
@@ -1180,7 +1186,7 @@ async def trivia(interaction: discord.Interaction):
         await interaction.channel.send(embed=result_embed)
 
     except asyncio.TimeoutError:
-        timeout_embed = mouren_embed(
+        timeout_embed = firm1_embed(
             title="⏰ Temps écoulé !",
             description=f"La bonne réponse était **{q['options'][q['correct']]}**.",
             color=COLOR_ERROR,
@@ -1194,19 +1200,19 @@ async def trivia(interaction: discord.Interaction):
 @tree.error
 async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
     if isinstance(error, app_commands.MissingPermissions):
-        embed = mouren_embed(
+        embed = firm1_embed(
             title="Permission refusée",
             description="Vous n'avez pas les permissions nécessaires.",
             color=COLOR_ERROR,
         )
     elif isinstance(error, app_commands.CommandOnCooldown):
-        embed = mouren_embed(
+        embed = firm1_embed(
             title="Cooldown",
             description=f"Attendez encore **{error.retry_after:.1f}s** avant de réutiliser cette commande.",
             color=COLOR_WARNING,
         )
     else:
-        embed = mouren_embed(
+        embed = firm1_embed(
             title="Erreur inattendue",
             description=f"```{str(error)[:200]}```",
             color=COLOR_ERROR,
