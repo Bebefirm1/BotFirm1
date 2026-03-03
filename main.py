@@ -167,7 +167,9 @@ async def help_cmd(interaction: discord.Interaction):
                 "`/ping` — Latence du bot\n"
                 "`/info-serveur` — Infos sur le serveur\n"
                 "`/info-user [@user]` — Infos sur un utilisateur\n"
-                "`/avatar [@user]` — Avatar d'un utilisateur"
+                "`/avatar [@user]` — Avatar d'un utilisateur\n"
+                "`/say <message> [#salon]` — Parler à la place du bot *(admin)*\n"
+                "`/renommer-bot <nom>` — Changer le pseudo du bot *(admin)*"
             ), False),
         ],
     )
@@ -238,6 +240,62 @@ async def avatar_cmd(interaction: discord.Interaction, membre: discord.Member | 
     )
     embed.set_image(url=membre.display_avatar.url)
     await interaction.response.send_message(embed=embed)
+
+
+@tree.command(name="say", description="[Admin] Fait parler le bot à sa place")
+@app_commands.describe(
+    message="Le message à envoyer",
+    salon="Le salon où envoyer le message (optionnel, défaut : salon actuel)",
+)
+@app_commands.checks.has_permissions(administrator=True)
+async def say_cmd(interaction: discord.Interaction, message: str, salon: discord.TextChannel | None = None):
+    target = salon or interaction.channel
+    try:
+        await target.send(message)
+        embed = firm1_embed(
+            title="✅ Message envoyé",
+            description=f"Message envoyé dans {target.mention}.",
+            color=COLOR_SUCCESS,
+            fields=[("📝 Contenu", message[:1024], False)],
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+    except discord.Forbidden:
+        await interaction.response.send_message(
+            embed=firm1_embed("Erreur", f"Je n'ai pas la permission d'envoyer des messages dans {target.mention}.", color=COLOR_ERROR),
+            ephemeral=True,
+        )
+
+
+@tree.command(name="renommer-bot", description="[Admin] Change le pseudo du bot sur ce serveur")
+@app_commands.describe(nom="Le nouveau pseudo du bot (max 32 caractères)")
+@app_commands.checks.has_permissions(administrator=True)
+async def rename_bot(interaction: discord.Interaction, nom: str):
+    if len(nom) > 32:
+        await interaction.response.send_message(
+            embed=firm1_embed("Erreur", "Le pseudo ne peut pas dépasser **32 caractères**.", color=COLOR_ERROR),
+            ephemeral=True,
+        )
+        return
+    try:
+        await interaction.guild.me.edit(nick=nom)
+        embed = firm1_embed(
+            title="✅ Pseudo mis à jour",
+            description=f"Le bot s'appelle désormais **{nom}** sur ce serveur.",
+            color=COLOR_SUCCESS,
+            fields=[("⚠️ Limite Discord", "Maximum 2 changements de pseudo par heure.", False)],
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+    except discord.HTTPException as e:
+        if e.status == 429:
+            await interaction.response.send_message(
+                embed=firm1_embed("Limite atteinte", "Trop de changements de pseudo. Réessayez dans **1 heure**.", color=COLOR_WARNING),
+                ephemeral=True,
+            )
+        else:
+            await interaction.response.send_message(
+                embed=firm1_embed("Erreur", f"Impossible de changer le pseudo : `{e}`", color=COLOR_ERROR),
+                ephemeral=True,
+            )
 
 
 # ─────────────────────────────────────────────
