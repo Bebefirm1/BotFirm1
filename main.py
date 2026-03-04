@@ -136,94 +136,444 @@ async def on_guild_join(guild: discord.Guild):
 # ─────────────────────────────────────────────
 #  COMMANDES GÉNÉRALES
 # ─────────────────────────────────────────────
-@tree.command(name="help", description="Affiche l'aide complète de Firm1 Bot")
-async def help_cmd(interaction: discord.Interaction):
 
+# ─────────────────────────────────────────────
+#  DICTIONNAIRE COMPLET DES COMMANDES (pour /help <commande>)
+# ─────────────────────────────────────────────
+COMMANDS_DETAIL = {
+    # Tickets
+    "ticket": {
+        "usage": "/ticket <raison>",
+        "description": "Ouvre un ticket de support privé. Un salon dédié est créé avec les permissions appropriées.",
+        "args": [("raison", "Optionnel", "Décrit votre problème ou demande.")],
+        "perms": "Tout le monde",
+        "category": "🎫 Tickets",
+    },
+    "fermer": {
+        "usage": "/fermer",
+        "description": "Ferme le ticket actuel. Une confirmation est demandée avant la suppression du salon (5s).",
+        "args": [],
+        "perms": "Tout le monde (dans un ticket)",
+        "category": "🎫 Tickets",
+    },
+    "ajouter": {
+        "usage": "/ajouter <@user>",
+        "description": "Ajoute un membre au ticket actuel pour qu'il puisse lire et écrire dedans.",
+        "args": [("@user", "Requis", "Le membre à ajouter.")],
+        "perms": "Tout le monde (dans un ticket)",
+        "category": "🎫 Tickets",
+    },
+    "retirer": {
+        "usage": "/retirer <@user>",
+        "description": "Retire les permissions d'un membre dans le ticket actuel.",
+        "args": [("@user", "Requis", "Le membre à retirer.")],
+        "perms": "Tout le monde (dans un ticket)",
+        "category": "🎫 Tickets",
+    },
+    "panel-tickets": {
+        "usage": "/panel-tickets",
+        "description": "Envoie le panel d'ouverture de tickets dans le salon actuel avec un bouton interactif.",
+        "args": [],
+        "perms": "Administrateur",
+        "category": "🎫 Tickets",
+    },
+    "config-tickets": {
+        "usage": "/config-tickets",
+        "description": "Affiche la configuration actuelle du système de tickets : salon de logs, rôles pingés, catégories.",
+        "args": [],
+        "perms": "Administrateur",
+        "category": "🎫 Tickets",
+    },
+    "set-log-tickets": {
+        "usage": "/set-log-tickets <#salon>",
+        "description": "Définit le salon qui recevra les logs d'ouverture et fermeture de tickets.",
+        "args": [("#salon", "Requis", "Le salon texte cible.")],
+        "perms": "Administrateur",
+        "category": "🎫 Tickets",
+    },
+    "ajouter-role-ticket": {
+        "usage": "/ajouter-role-ticket <@role>",
+        "description": "Ajoute un rôle à pinger automatiquement à l'ouverture de chaque ticket.",
+        "args": [("@role", "Requis", "Le rôle à ajouter.")],
+        "perms": "Administrateur",
+        "category": "🎫 Tickets",
+    },
+    "retirer-role-ticket": {
+        "usage": "/retirer-role-ticket <@role>",
+        "description": "Retire un rôle de la liste des pings automatiques.",
+        "args": [("@role", "Requis", "Le rôle à retirer.")],
+        "perms": "Administrateur",
+        "category": "🎫 Tickets",
+    },
+    "ajouter-categorie-ticket": {
+        "usage": "/ajouter-categorie-ticket <label> <categorie_discord> [description] [emoji]",
+        "description": "Ajoute une catégorie au menu de sélection des tickets. Les tickets de cette catégorie seront créés dans la catégorie Discord choisie.",
+        "args": [
+            ("label", "Requis", "Nom affiché (ex: Support, Bug)."),
+            ("categorie_discord", "Requis", "Catégorie Discord cible."),
+            ("description", "Optionnel", "Courte description."),
+            ("emoji", "Optionnel", "Emoji affiché (défaut: 🎫)."),
+        ],
+        "perms": "Administrateur",
+        "category": "🎫 Tickets",
+    },
+    "retirer-categorie-ticket": {
+        "usage": "/retirer-categorie-ticket <label>",
+        "description": "Supprime une catégorie du menu de sélection des tickets.",
+        "args": [("label", "Requis", "Nom exact de la catégorie à supprimer.")],
+        "perms": "Administrateur",
+        "category": "🎫 Tickets",
+    },
+    "reset-config-tickets": {
+        "usage": "/reset-config-tickets",
+        "description": "Réinitialise toute la configuration des tickets (logs, rôles, catégories).",
+        "args": [],
+        "perms": "Administrateur",
+        "category": "🎫 Tickets",
+    },
+    # Modération
+    "ban": {
+        "usage": "/ban <@user> [raison]",
+        "description": "Bannit définitivement un membre du serveur. Un MP est envoyé à l'utilisateur avec la raison.",
+        "args": [("@user", "Requis", "Le membre à bannir."), ("raison", "Optionnel", "Raison du bannissement.")],
+        "perms": "Bannir des membres",
+        "category": "🔨 Modération",
+    },
+    "kick": {
+        "usage": "/kick <@user> [raison]",
+        "description": "Expulse un membre du serveur (il peut revenir). Un MP lui est envoyé.",
+        "args": [("@user", "Requis", "Le membre à expulser."), ("raison", "Optionnel", "Raison.")],
+        "perms": "Expulser des membres",
+        "category": "🔨 Modération",
+    },
+    "mute": {
+        "usage": "/mute <@user> <durée> [raison]",
+        "description": "Met un membre en sourdine via le timeout natif Discord. Durée : `10s`, `5m`, `2h`, `1j`. Max 28 jours.",
+        "args": [("@user", "Requis", "Le membre à mute."), ("durée", "Requis", "Durée : 10s, 5m, 2h, 1j…"), ("raison", "Optionnel", "Raison.")],
+        "perms": "Modérer les membres",
+        "category": "🔨 Modération",
+    },
+    "unmute": {
+        "usage": "/unmute <@user>",
+        "description": "Retire le timeout d'un membre avant son expiration.",
+        "args": [("@user", "Requis", "Le membre à unmute.")],
+        "perms": "Modérer les membres",
+        "category": "🔨 Modération",
+    },
+    "warn": {
+        "usage": "/warn <@user> <raison>",
+        "description": "Envoie un avertissement à un membre. L'historique est sauvegardé et consultable avec `/warns`.",
+        "args": [("@user", "Requis", "Le membre à avertir."), ("raison", "Requis", "Raison de l'avertissement.")],
+        "perms": "Expulser des membres",
+        "category": "🔨 Modération",
+    },
+    "warns": {
+        "usage": "/warns <@user>",
+        "description": "Affiche l'historique complet des avertissements d'un membre.",
+        "args": [("@user", "Requis", "Le membre à consulter.")],
+        "perms": "Expulser des membres",
+        "category": "🔨 Modération",
+    },
+    "clear": {
+        "usage": "/clear <nombre>",
+        "description": "Supprime en masse les derniers messages du salon. Maximum 100 messages à la fois.",
+        "args": [("nombre", "Requis", "Nombre de messages à supprimer (1–100).")],
+        "perms": "Gérer les messages",
+        "category": "🔨 Modération",
+    },
+    # Auto-mod
+    "config-auto-mod": {
+        "usage": "/config-auto-mod",
+        "description": "Affiche la configuration complète de l'auto-modération : mots interdits, salons restreints, antispam.",
+        "args": [],
+        "perms": "Administrateur",
+        "category": "🤖 Auto-Modération",
+    },
+    "ajouter-mot-interdit": {
+        "usage": "/ajouter-mot-interdit <mot>",
+        "description": "Ajoute un mot à la liste noire. Tout message contenant ce mot sera supprimé automatiquement.",
+        "args": [("mot", "Requis", "Le mot à interdire (insensible à la casse).")],
+        "perms": "Administrateur",
+        "category": "🤖 Auto-Modération",
+    },
+    "retirer-mot-interdit": {
+        "usage": "/retirer-mot-interdit <mot>",
+        "description": "Retire un mot de la liste noire.",
+        "args": [("mot", "Requis", "Le mot à retirer.")],
+        "perms": "Administrateur",
+        "category": "🤖 Auto-Modération",
+    },
+    "salon-no-lien": {
+        "usage": "/salon-no-lien [#salon]",
+        "description": "Active ou désactive (toggle) l'interdiction de liens dans un salon. Les liens postés seront supprimés.",
+        "args": [("#salon", "Optionnel", "Le salon concerné (défaut : salon actuel).")],
+        "perms": "Administrateur",
+        "category": "🤖 Auto-Modération",
+    },
+    "salon-no-image": {
+        "usage": "/salon-no-image [#salon]",
+        "description": "Active ou désactive (toggle) l'interdiction d'images et pièces jointes dans un salon.",
+        "args": [("#salon", "Optionnel", "Le salon concerné (défaut : salon actuel).")],
+        "perms": "Administrateur",
+        "category": "🤖 Auto-Modération",
+    },
+    # Whitelist & Blacklist
+    "whitelist-ajouter": {
+        "usage": "/whitelist-ajouter <@user>",
+        "description": "Ajoute un membre à la whitelist. Il sera ignoré par toute l'auto-modération (mots, liens, images, antispam).",
+        "args": [("@user", "Requis", "Le membre à whitelister.")],
+        "perms": "Administrateur",
+        "category": "🛡️ Whitelist & Blacklist",
+    },
+    "whitelist-retirer": {
+        "usage": "/whitelist-retirer <@user>",
+        "description": "Retire un membre de la whitelist. Il sera à nouveau soumis à l'auto-modération.",
+        "args": [("@user", "Requis", "Le membre à retirer.")],
+        "perms": "Administrateur",
+        "category": "🛡️ Whitelist & Blacklist",
+    },
+    "whitelist-liste": {
+        "usage": "/whitelist-liste",
+        "description": "Affiche tous les membres actuellement whitelistés sur ce serveur.",
+        "args": [],
+        "perms": "Administrateur",
+        "category": "🛡️ Whitelist & Blacklist",
+    },
+    "blacklist-ajouter": {
+        "usage": "/blacklist-ajouter <@user> [raison]",
+        "description": "Blackliste un membre : il est expulsé immédiatement et expulsé automatiquement s'il tente de revenir.",
+        "args": [("@user", "Requis", "Le membre à blacklister."), ("raison", "Optionnel", "Raison.")],
+        "perms": "Administrateur",
+        "category": "🛡️ Whitelist & Blacklist",
+    },
+    "blacklist-retirer": {
+        "usage": "/blacklist-retirer <@user>",
+        "description": "Retire un membre de la blacklist. Il peut à nouveau rejoindre le serveur.",
+        "args": [("@user", "Requis", "Le membre à retirer (peut ne plus être sur le serveur).")],
+        "perms": "Administrateur",
+        "category": "🛡️ Whitelist & Blacklist",
+    },
+    "blacklist-liste": {
+        "usage": "/blacklist-liste",
+        "description": "Affiche tous les membres actuellement blacklistés sur ce serveur.",
+        "args": [],
+        "perms": "Administrateur",
+        "category": "🛡️ Whitelist & Blacklist",
+    },
+    # Mini-jeux
+    "pile-ou-face": {
+        "usage": "/pile-ou-face",
+        "description": "Lance une pièce et affiche le résultat (Pile ou Face).",
+        "args": [],
+        "perms": "Tout le monde",
+        "category": "🎮 Mini-Jeux",
+    },
+    "dé": {
+        "usage": "/dé [faces]",
+        "description": "Lance un dé avec le nombre de faces choisi (défaut : 6).",
+        "args": [("faces", "Optionnel", "Nombre de faces (min 2, défaut 6).")],
+        "perms": "Tout le monde",
+        "category": "🎮 Mini-Jeux",
+    },
+    "rps": {
+        "usage": "/rps <choix>",
+        "description": "Joue à Pierre-Papier-Ciseaux contre le bot.",
+        "args": [("choix", "Requis", "pierre, papier ou ciseaux.")],
+        "perms": "Tout le monde",
+        "category": "🎮 Mini-Jeux",
+    },
+    "nombre": {
+        "usage": "/nombre [max]",
+        "description": "Le bot choisit un nombre secret. Devinez-le en 30 secondes avec des indices chaud/froid.",
+        "args": [("max", "Optionnel", "Valeur maximale (défaut : 100).")],
+        "perms": "Tout le monde",
+        "category": "🎮 Mini-Jeux",
+    },
+    "8ball": {
+        "usage": "/8ball <question>",
+        "description": "Posez une question à la boule magique. Elle répondra par oui, non ou peut-être.",
+        "args": [("question", "Requis", "Votre question.")],
+        "perms": "Tout le monde",
+        "category": "🎮 Mini-Jeux",
+    },
+    "trivia": {
+        "usage": "/trivia",
+        "description": "Pose une question de culture générale (QCM). Répondez A/B/C/D en 20 secondes.",
+        "args": [],
+        "perms": "Tout le monde",
+        "category": "🎮 Mini-Jeux",
+    },
+    # Utilitaires
+    "ping": {
+        "usage": "/ping",
+        "description": "Affiche la latence WebSocket du bot en millisecondes.",
+        "args": [],
+        "perms": "Tout le monde",
+        "category": "🛠️ Utilitaires",
+    },
+    "info-serveur": {
+        "usage": "/info-serveur",
+        "description": "Affiche les informations du serveur : propriétaire, membres, salons, rôles, niveau de vérification.",
+        "args": [],
+        "perms": "Tout le monde",
+        "category": "🛠️ Utilitaires",
+    },
+    "info-user": {
+        "usage": "/info-user [@user]",
+        "description": "Affiche les informations d'un membre : date de création, date d'arrivée, rôles.",
+        "args": [("@user", "Optionnel", "Le membre à inspecter (défaut : vous-même).")],
+        "perms": "Tout le monde",
+        "category": "🛠️ Utilitaires",
+    },
+    "avatar": {
+        "usage": "/avatar [@user]",
+        "description": "Affiche l'avatar d'un membre en haute résolution avec un lien direct.",
+        "args": [("@user", "Optionnel", "Le membre (défaut : vous-même).")],
+        "perms": "Tout le monde",
+        "category": "🛠️ Utilitaires",
+    },
+    "say": {
+        "usage": "/say <message> [#salon]",
+        "description": "Fait envoyer un message par le bot dans le salon actuel ou un salon choisi.",
+        "args": [("message", "Requis", "Le message à envoyer."), ("#salon", "Optionnel", "Salon cible (défaut : salon actuel).")],
+        "perms": "Administrateur",
+        "category": "🛠️ Utilitaires",
+    },
+    "renommer-bot": {
+        "usage": "/renommer-bot <nom>",
+        "description": "Change le pseudo du bot sur ce serveur uniquement. Limité à 2 changements par heure (limite Discord).",
+        "args": [("nom", "Requis", "Nouveau pseudo (max 32 caractères).")],
+        "perms": "Administrateur",
+        "category": "🛠️ Utilitaires",
+    },
+    "help": {
+        "usage": "/help [commande]",
+        "description": "Affiche l'aide paginée du bot. Si une commande est précisée, affiche ses détails complets.",
+        "args": [("commande", "Optionnel", "Nom d'une commande pour plus de détails.")],
+        "perms": "Tout le monde",
+        "category": "🛠️ Utilitaires",
+    },
+}
+
+
+@tree.command(name="help", description="Affiche l'aide complète ou les détails d'une commande")
+@app_commands.describe(commande="Nom d'une commande pour plus de détails (optionnel)")
+async def help_cmd(interaction: discord.Interaction, commande: str | None = None):
+
+    # ── Mode détail : /help <commande> ──
+    if commande:
+        key = commande.lstrip("/").lower()
+        info = COMMANDS_DETAIL.get(key)
+        if not info:
+            await interaction.response.send_message(
+                embed=firm1_embed(
+                    "Commande introuvable",
+                    f"Aucune commande nommée `/{key}`.\nUtilisez `/help` pour voir toutes les commandes.",
+                    color=COLOR_ERROR,
+                ),
+                ephemeral=True,
+            )
+            return
+
+        args_text = "\n".join(
+            f"`{a}` — **{req}** — {desc}" for a, req, desc in info["args"]
+        ) if info["args"] else "*Aucun argument*"
+
+        embed = discord.Embed(
+            title=f"📖  /{key}",
+            description=info["description"],
+            color=COLOR_PRIMARY,
+            timestamp=datetime.datetime.utcnow(),
+        )
+        embed.add_field(name="📝 Utilisation",   value=f"`{info['usage']}`",  inline=False)
+        embed.add_field(name="📂 Catégorie",      value=info["category"],      inline=True)
+        embed.add_field(name="🔒 Permission",     value=info["perms"],         inline=True)
+        embed.add_field(name="⚙️ Arguments",      value=args_text,             inline=False)
+        embed.set_footer(text="Firm1 Bot • Support Gaming")
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+        return
+
+    # ── Mode paginé : /help ──
     pages = [
-        # Page 1 — Tickets
         firm1_embed(
             title="Firm1 Bot — 🎫 Tickets (1/5)",
-            description="Système de tickets de support.",
+            description="Système de tickets de support.\nℹ️ `/help <commande>` pour plus de détails.",
             color=COLOR_PRIMARY,
             fields=[
                 ("📩 Membres", (
-                    "`/ticket <raison>` — Ouvrir un ticket\n"
+                    "`/ticket [raison]` — Ouvrir un ticket\n"
                     "`/fermer` — Fermer votre ticket\n"
-                    "`/ajouter <@user>` — Ajouter un membre au ticket\n"
-                    "`/retirer <@user>` — Retirer un membre du ticket"
+                    "`/ajouter <@user>` — Ajouter un membre\n"
+                    "`/retirer <@user>` — Retirer un membre"
                 ), False),
                 ("⚙️ Administration *(admin)*", (
-                    "`/panel-tickets` — Envoyer le panel d'ouverture\n"
-                    "`/config-tickets` — Voir la configuration complète\n"
-                    "`/set-log-tickets #salon` — Définir le salon de logs\n"
-                    "`/ajouter-role-ticket @role` — Ajouter un rôle ping\n"
-                    "`/retirer-role-ticket @role` — Retirer un rôle ping\n"
+                    "`/panel-tickets` — Envoyer le panel\n"
+                    "`/config-tickets` — Voir la configuration\n"
+                    "`/set-log-tickets <#salon>` — Salon de logs\n"
+                    "`/ajouter-role-ticket <@role>` — Ajouter rôle ping\n"
+                    "`/retirer-role-ticket <@role>` — Retirer rôle ping\n"
                     "`/ajouter-categorie-ticket` — Ajouter une catégorie\n"
                     "`/retirer-categorie-ticket` — Supprimer une catégorie\n"
                     "`/reset-config-tickets` — Réinitialiser la config"
                 ), False),
             ],
         ),
-        # Page 2 — Modération
         firm1_embed(
             title="Firm1 Bot — 🔨 Modération (2/5)",
-            description="Commandes de modération manuelle.",
+            description="Commandes de modération manuelle.\nℹ️ `/help <commande>` pour plus de détails.",
             color=COLOR_ERROR,
             fields=[
                 ("👮 Sanctions *(modo)*", (
-                    "`/ban <@user> [raison]` — Bannir un membre\n"
-                    "`/kick <@user> [raison]` — Expulser un membre\n"
-                    "`/mute <@user> <durée> [raison]` — Mute (10s, 5m, 2h, 1j…)\n"
+                    "`/ban <@user> [raison]` — Bannir\n"
+                    "`/kick <@user> [raison]` — Expulser\n"
+                    "`/mute <@user> <durée> [raison]` — Mute (10s/5m/2h/1j)\n"
                     "`/unmute <@user>` — Retirer le mute\n"
-                    "`/warn <@user> <raison>` — Avertir un membre\n"
+                    "`/warn <@user> <raison>` — Avertir\n"
                     "`/warns <@user>` — Voir les avertissements\n"
                     "`/clear <1-100>` — Supprimer des messages"
                 ), False),
             ],
         ),
-        # Page 3 — Auto-Modération
         firm1_embed(
             title="Firm1 Bot — 🤖 Auto-Modération (3/5)",
-            description="Modération automatique configurable.",
+            description="Modération automatique configurable.\nℹ️ `/help <commande>` pour plus de détails.",
             color=COLOR_WARNING,
             fields=[
                 ("⚙️ Configuration *(admin)*", (
                     "`/config-auto-mod` — Voir toute la config\n"
                     "`/ajouter-mot-interdit <mot>` — Ajouter un mot interdit\n"
                     "`/retirer-mot-interdit <mot>` — Retirer un mot interdit\n"
-                    "`/salon-no-lien [#salon]` — Toggle interdiction de liens\n"
-                    "`/salon-no-image [#salon]` — Toggle interdiction d'images"
+                    "`/salon-no-lien [#salon]` — Toggle interdiction liens\n"
+                    "`/salon-no-image [#salon]` — Toggle interdiction images"
                 ), False),
-                ("🚨 Automatique (aucune commande)", (
+                ("🚨 Automatique", (
                     "• **Mots interdits** → suppression + MP\n"
                     "• **Liens interdits** → suppression par salon\n"
                     "• **Images interdites** → suppression par salon\n"
-                    "• **Antispam** → 5 msg / 5s → mute 5min"
+                    "• **Antispam** → 5 msg/5s → mute 5min auto"
                 ), False),
             ],
         ),
-        # Page 4 — Whitelist & Blacklist
         firm1_embed(
             title="Firm1 Bot — 🛡️ Whitelist & Blacklist (4/5)",
-            description="Gestion des accès membres.",
+            description="Gestion des accès membres.\nℹ️ `/help <commande>` pour plus de détails.",
             color=COLOR_INFO,
             fields=[
                 ("✅ Whitelist *(admin)* — bypass auto-mod", (
-                    "`/whitelist-ajouter <@user>` — Ajouter à la whitelist\n"
-                    "`/whitelist-retirer <@user>` — Retirer de la whitelist\n"
-                    "`/whitelist-liste` — Voir tous les membres whitelistés"
+                    "`/whitelist-ajouter <@user>` — Ajouter\n"
+                    "`/whitelist-retirer <@user>` — Retirer\n"
+                    "`/whitelist-liste` — Voir la liste"
                 ), False),
-                ("⛔ Blacklist *(admin)* — expulsion automatique", (
-                    "`/blacklist-ajouter <@user> [raison]` — Blacklister + expulser\n"
-                    "`/blacklist-retirer <@user>` — Retirer de la blacklist\n"
-                    "`/blacklist-liste` — Voir tous les membres blacklistés"
+                ("⛔ Blacklist *(admin)* — expulsion auto", (
+                    "`/blacklist-ajouter <@user> [raison]` — Blacklister\n"
+                    "`/blacklist-retirer <@user>` — Retirer\n"
+                    "`/blacklist-liste` — Voir la liste"
                 ), False),
             ],
         ),
-        # Page 5 — Mini-Jeux & Utilitaires
         firm1_embed(
             title="Firm1 Bot — 🎮 Mini-Jeux & Utilitaires (5/5)",
-            description="Jeux et outils divers.",
+            description="Jeux et outils divers.\nℹ️ `/help <commande>` pour plus de détails.",
             color=COLOR_SUCCESS,
             fields=[
                 ("🎮 Mini-Jeux", (
@@ -237,10 +587,11 @@ async def help_cmd(interaction: discord.Interaction):
                 ("🛠️ Utilitaires", (
                     "`/ping` — Latence du bot\n"
                     "`/info-serveur` — Infos sur le serveur\n"
-                    "`/info-user [@user]` — Infos sur un utilisateur\n"
-                    "`/avatar [@user]` — Avatar d'un utilisateur\n"
+                    "`/info-user [@user]` — Infos sur un membre\n"
+                    "`/avatar [@user]` — Avatar d'un membre\n"
                     "`/say <message> [#salon]` — Parler à la place du bot *(admin)*\n"
-                    "`/renommer-bot <nom>` — Changer le pseudo du bot *(admin)*"
+                    "`/renommer-bot <nom>` — Changer le pseudo *(admin)*\n"
+                    "`/help [commande]` — Cette aide"
                 ), False),
             ],
         ),
@@ -275,7 +626,6 @@ async def help_cmd(interaction: discord.Interaction):
 
     view = HelpView()
     await interaction.response.send_message(embed=pages[0], view=view, ephemeral=True)
-
 
 
 
