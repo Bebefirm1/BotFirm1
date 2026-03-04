@@ -138,57 +138,145 @@ async def on_guild_join(guild: discord.Guild):
 # ─────────────────────────────────────────────
 @tree.command(name="help", description="Affiche l'aide complète de Firm1 Bot")
 async def help_cmd(interaction: discord.Interaction):
-    embed = firm1_embed(
-        title="Firm1 Bot — Référence des commandes",
-        description=(
-            "Bienvenue dans le système de support **Firm1**.\n"
-            "Toutes les commandes sont accessibles via le préfixe `/`."
+
+    pages = [
+        # Page 1 — Tickets
+        firm1_embed(
+            title="Firm1 Bot — 🎫 Tickets (1/5)",
+            description="Système de tickets de support.",
+            color=COLOR_PRIMARY,
+            fields=[
+                ("📩 Membres", (
+                    "`/ticket <raison>` — Ouvrir un ticket\n"
+                    "`/fermer` — Fermer votre ticket\n"
+                    "`/ajouter <@user>` — Ajouter un membre au ticket\n"
+                    "`/retirer <@user>` — Retirer un membre du ticket"
+                ), False),
+                ("⚙️ Administration *(admin)*", (
+                    "`/panel-tickets` — Envoyer le panel d'ouverture\n"
+                    "`/config-tickets` — Voir la configuration complète\n"
+                    "`/set-log-tickets #salon` — Définir le salon de logs\n"
+                    "`/ajouter-role-ticket @role` — Ajouter un rôle ping\n"
+                    "`/retirer-role-ticket @role` — Retirer un rôle ping\n"
+                    "`/ajouter-categorie-ticket` — Ajouter une catégorie\n"
+                    "`/retirer-categorie-ticket` — Supprimer une catégorie\n"
+                    "`/reset-config-tickets` — Réinitialiser la config"
+                ), False),
+            ],
         ),
-        color=COLOR_PRIMARY,
-        fields=[
-            ("🎫 **Tickets**", (
-                "`/ticket <raison>` — Ouvrir un ticket\n"
-                "`/fermer` — Fermer votre ticket\n"
-                "`/ajouter <@user>` — Ajouter un utilisateur au ticket\n"
-                "`/retirer <@user>` — Retirer un utilisateur du ticket\n"
-                "`/panel-tickets` — Envoyer le panel *(admin)*\n"
-                "`/config-tickets` — Voir la configuration *(admin)*\n"
-                "`/ajouter-categorie-ticket` — Ajouter une catégorie *(admin)*\n"
-                "`/retirer-categorie-ticket` — Supprimer une catégorie *(admin)*"
-            ), False),
-            ("🔨 **Modération** *(Admin/Modo)*", (
-                "`/ban <@user> [raison]` — Bannir un membre\n"
-                "`/kick <@user> [raison]` — Expulser un membre\n"
-                "`/mute <@user> <durée> [raison]` — Rendre muet (ex: 10m, 2h, 1j)\n"
-                "`/unmute <@user>` — Retirer le mute\n"
-                "`/warn <@user> <raison>` — Avertir un membre\n"
-                "`/warns <@user>` — Voir les avertissements\n"
-                "`/clear <nombre>` — Supprimer des messages\n"
-                "`/config-auto-mod` — Voir la config auto-modération *(admin)*\n"
-                "`/ajouter-mot-interdit <mot>` — Ajouter un mot interdit *(admin)*\n"
-                "`/retirer-mot-interdit <mot>` — Retirer un mot interdit *(admin)*\n"
-                "`/salon-no-lien [#salon]` — Interdire les liens dans un salon *(admin)*\n"
-                "`/salon-no-image [#salon]` — Interdire les images dans un salon *(admin)*"
-            ), False),
-            ("🎮 **Mini-Jeux**", (
-                "`/pile-ou-face` — Lancer une pièce\n"
-                "`/dé [faces]` — Lancer un dé\n"
-                "`/rps <choix>` — Pierre-papier-ciseaux\n"
-                "`/nombre [max]` — Deviner un nombre\n"
-                "`/8ball <question>` — Boule magique\n"
-                "`/trivia` — Question de culture générale"
-            ), False),
-            ("🛠️ **Utilitaires**", (
-                "`/ping` — Latence du bot\n"
-                "`/info-serveur` — Infos sur le serveur\n"
-                "`/info-user [@user]` — Infos sur un utilisateur\n"
-                "`/avatar [@user]` — Avatar d'un utilisateur\n"
-                "`/say <message> [#salon]` — Parler à la place du bot *(admin)*\n"
-                "`/renommer-bot <nom>` — Changer le pseudo du bot *(admin)*"
-            ), False),
-        ],
-    )
-    await interaction.response.send_message(embed=embed, ephemeral=True)
+        # Page 2 — Modération
+        firm1_embed(
+            title="Firm1 Bot — 🔨 Modération (2/5)",
+            description="Commandes de modération manuelle.",
+            color=COLOR_ERROR,
+            fields=[
+                ("👮 Sanctions *(modo)*", (
+                    "`/ban <@user> [raison]` — Bannir un membre\n"
+                    "`/kick <@user> [raison]` — Expulser un membre\n"
+                    "`/mute <@user> <durée> [raison]` — Mute (10s, 5m, 2h, 1j…)\n"
+                    "`/unmute <@user>` — Retirer le mute\n"
+                    "`/warn <@user> <raison>` — Avertir un membre\n"
+                    "`/warns <@user>` — Voir les avertissements\n"
+                    "`/clear <1-100>` — Supprimer des messages"
+                ), False),
+            ],
+        ),
+        # Page 3 — Auto-Modération
+        firm1_embed(
+            title="Firm1 Bot — 🤖 Auto-Modération (3/5)",
+            description="Modération automatique configurable.",
+            color=COLOR_WARNING,
+            fields=[
+                ("⚙️ Configuration *(admin)*", (
+                    "`/config-auto-mod` — Voir toute la config\n"
+                    "`/ajouter-mot-interdit <mot>` — Ajouter un mot interdit\n"
+                    "`/retirer-mot-interdit <mot>` — Retirer un mot interdit\n"
+                    "`/salon-no-lien [#salon]` — Toggle interdiction de liens\n"
+                    "`/salon-no-image [#salon]` — Toggle interdiction d'images"
+                ), False),
+                ("🚨 Automatique (aucune commande)", (
+                    "• **Mots interdits** → suppression + MP\n"
+                    "• **Liens interdits** → suppression par salon\n"
+                    "• **Images interdites** → suppression par salon\n"
+                    "• **Antispam** → 5 msg / 5s → mute 5min"
+                ), False),
+            ],
+        ),
+        # Page 4 — Whitelist & Blacklist
+        firm1_embed(
+            title="Firm1 Bot — 🛡️ Whitelist & Blacklist (4/5)",
+            description="Gestion des accès membres.",
+            color=COLOR_INFO,
+            fields=[
+                ("✅ Whitelist *(admin)* — bypass auto-mod", (
+                    "`/whitelist-ajouter <@user>` — Ajouter à la whitelist\n"
+                    "`/whitelist-retirer <@user>` — Retirer de la whitelist\n"
+                    "`/whitelist-liste` — Voir tous les membres whitelistés"
+                ), False),
+                ("⛔ Blacklist *(admin)* — expulsion automatique", (
+                    "`/blacklist-ajouter <@user> [raison]` — Blacklister + expulser\n"
+                    "`/blacklist-retirer <@user>` — Retirer de la blacklist\n"
+                    "`/blacklist-liste` — Voir tous les membres blacklistés"
+                ), False),
+            ],
+        ),
+        # Page 5 — Mini-Jeux & Utilitaires
+        firm1_embed(
+            title="Firm1 Bot — 🎮 Mini-Jeux & Utilitaires (5/5)",
+            description="Jeux et outils divers.",
+            color=COLOR_SUCCESS,
+            fields=[
+                ("🎮 Mini-Jeux", (
+                    "`/pile-ou-face` — Lancer une pièce\n"
+                    "`/dé [faces]` — Lancer un dé\n"
+                    "`/rps <choix>` — Pierre-Papier-Ciseaux\n"
+                    "`/nombre [max]` — Deviner un nombre\n"
+                    "`/8ball <question>` — Boule magique\n"
+                    "`/trivia` — Question de culture générale"
+                ), False),
+                ("🛠️ Utilitaires", (
+                    "`/ping` — Latence du bot\n"
+                    "`/info-serveur` — Infos sur le serveur\n"
+                    "`/info-user [@user]` — Infos sur un utilisateur\n"
+                    "`/avatar [@user]` — Avatar d'un utilisateur\n"
+                    "`/say <message> [#salon]` — Parler à la place du bot *(admin)*\n"
+                    "`/renommer-bot <nom>` — Changer le pseudo du bot *(admin)*"
+                ), False),
+            ],
+        ),
+    ]
+
+    class HelpView(discord.ui.View):
+        def __init__(self):
+            super().__init__(timeout=120)
+            self.page = 0
+            self._update_buttons()
+
+        def _update_buttons(self):
+            self.prev_btn.disabled = self.page == 0
+            self.next_btn.disabled = self.page == len(pages) - 1
+            self.page_btn.label    = f"{self.page + 1} / {len(pages)}"
+
+        @discord.ui.button(label="◀", style=discord.ButtonStyle.secondary)
+        async def prev_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+            self.page -= 1
+            self._update_buttons()
+            await interaction.response.edit_message(embed=pages[self.page], view=self)
+
+        @discord.ui.button(label="1 / 5", style=discord.ButtonStyle.primary, disabled=True)
+        async def page_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+            pass
+
+        @discord.ui.button(label="▶", style=discord.ButtonStyle.secondary)
+        async def next_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+            self.page += 1
+            self._update_buttons()
+            await interaction.response.edit_message(embed=pages[self.page], view=self)
+
+    view = HelpView()
+    await interaction.response.send_message(embed=pages[0], view=view, ephemeral=True)
+
+
 
 
 @tree.command(name="ping", description="Affiche la latence du bot")
