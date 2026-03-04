@@ -96,7 +96,6 @@ def firm1_embed(
 # ─────────────────────────────────────────────
 @bot.event
 async def on_ready():
-    await tree.sync()
     await bot.change_presence(
         activity=discord.Activity(
             type=discord.ActivityType.watching,
@@ -105,6 +104,16 @@ async def on_ready():
     )
     print(f"✅ Firm1 connecté en tant que {bot.user} (ID: {bot.user.id})")
     print(f"📋 Serveurs : {len(bot.guilds)}")
+    # Sync global
+    await tree.sync()
+    print("✅ Sync global effectué.")
+    # Sync instantané par serveur (commandes visibles immédiatement)
+    for guild in bot.guilds:
+        try:
+            await tree.sync(guild=guild)
+            print(f"✅ Commandes sync sur : {guild.name}")
+        except Exception as e:
+            print(f"⚠️ Sync échoué sur {guild.name} : {e}")
 
 
 @bot.event
@@ -147,13 +156,19 @@ async def help_cmd(interaction: discord.Interaction):
                 "`/ajouter-categorie-ticket` — Ajouter une catégorie *(admin)*\n"
                 "`/retirer-categorie-ticket` — Supprimer une catégorie *(admin)*"
             ), False),
-            ("⚙️ **Config Tickets** *(Admin)*", (
-                "`/config-tickets` — Voir la configuration actuelle\n"
-                "`/set-log-tickets #salon` — Définir le salon de logs\n"
-                "`/ajouter-role-ticket @role` — Ajouter un rôle ping\n"
-                "`/retirer-role-ticket @role` — Retirer un rôle ping\n"
-                "`/reset-config-tickets` — Réinitialiser la config\n"
-                "`/panel-tickets` — Envoyer le panel"
+            ("🔨 **Modération** *(Admin/Modo)*", (
+                "`/ban <@user> [raison]` — Bannir un membre\n"
+                "`/kick <@user> [raison]` — Expulser un membre\n"
+                "`/mute <@user> <durée> [raison]` — Rendre muet (ex: 10m, 2h, 1j)\n"
+                "`/unmute <@user>` — Retirer le mute\n"
+                "`/warn <@user> <raison>` — Avertir un membre\n"
+                "`/warns <@user>` — Voir les avertissements\n"
+                "`/clear <nombre>` — Supprimer des messages\n"
+                "`/config-auto-mod` — Voir la config auto-modération *(admin)*\n"
+                "`/ajouter-mot-interdit <mot>` — Ajouter un mot interdit *(admin)*\n"
+                "`/retirer-mot-interdit <mot>` — Retirer un mot interdit *(admin)*\n"
+                "`/salon-no-lien [#salon]` — Interdire les liens dans un salon *(admin)*\n"
+                "`/salon-no-image [#salon]` — Interdire les images dans un salon *(admin)*"
             ), False),
             ("🎮 **Mini-Jeux**", (
                 "`/pile-ou-face` — Lancer une pièce\n"
@@ -1282,8 +1297,565 @@ async def on_app_command_error(interaction: discord.Interaction, error: app_comm
 
 
 # ─────────────────────────────────────────────
-#  Lancement
+#  MODÉRATION
 # ─────────────────────────────────────────────
+
+# Stockage warns en mémoire (persisté dans guild_config)
+import re
+from discord.ext import tasks
+
+# ── Helpers ───────────────────────────────────
+
+def parse_duration(duration: str) -> int | None:
+    """Convertit '10m', '2h', '1j' en secondes. Retourne None si invalide."""
+    match = re.fullmatch(r"(\d+)(s|m|h|j)", duration.lower())
+    if not match:
+        return None
+    value, unit = int(match.group(1)), match.group(2)
+    return value * {"s": 1, "m": 60, "h": 3600, "j": 86400}[unit]
+
+def get_warns(guild_id: int, user_id: int) -> list:
+    cfg = get_guild_config(guild_id)
+    return cfg.get("warns", {}).get(str(user_id), [])
+
+def add_warn(guild_id: int, user_id: int, raison: str, moderator: str):
+    cfg  = get_guild_config(guild_id)
+    warns = cfg.get("warns", {})
+    uid  = str(user_id)
+    if uid not in warns:
+        warns[uid] = []
+    warns[uid].append({"raison": raison, "by": moderator, "at": datetime.datetime.utcnow().isoformat()})
+    set_guild_config(guild_id, "warns", warns)
+    return len(warns[uid])
+
+# ── Commandes de modération ────────────────────
+
+@tree.command(name="ban", description="[Modo] Bannir un membre du serveur")
+@app_commands.describe(membre="Le membre à bannir", raison="Raison du ban")
+@app_commands.checks.has_permissions(ban_members=True)
+async def ban_cmd(interaction: discord.Interaction, membre: discord.Member, raison: str = "Aucune raison fournie"):
+    if membre.top_role >= interaction.user.top_role:
+        await interaction.response.send_message(
+            embed=firm1_embed("Erreur", "Vous ne pouvez pas bannir un membre avec un rôle supérieur ou égal au vôtre.", color=COLOR_ERROR),
+            ephemeral=True,
+        )
+        return
+    try:
+        await membre.send(embed=firm1_embed("🔨 Vous avez été banni", f"**Serveur :** {interaction.guild.name}\n**Raison :** {raison}", color=COLOR_ERROR))
+    except Exception:
+        pass
+    await membre.ban(reason=raison)
+    await interaction.response.send_message(embed=firm1_embed(
+        "🔨 Membre banni",
+        f"{membre.mention} a été banni.",
+        color=COLOR_ERROR,
+        fields=[("👤 Membre", str(membre), True), ("📝 Raison", raison, True), ("🛡️ Modérateur", interaction.user.mention, True)],
+    ))
+
+
+@tree.command(name="kick", description="[Modo] Expulser un membre du serveur")
+@app_commands.describe(membre="Le membre à expulser", raison="Raison du kick")
+@app_commands.checks.has_permissions(kick_members=True)
+async def kick_cmd(interaction: discord.Interaction, membre: discord.Member, raison: str = "Aucune raison fournie"):
+    if membre.top_role >= interaction.user.top_role:
+        await interaction.response.send_message(
+            embed=firm1_embed("Erreur", "Vous ne pouvez pas expulser un membre avec un rôle supérieur ou égal au vôtre.", color=COLOR_ERROR),
+            ephemeral=True,
+        )
+        return
+    try:
+        await membre.send(embed=firm1_embed("👢 Vous avez été expulsé", f"**Serveur :** {interaction.guild.name}\n**Raison :** {raison}", color=COLOR_WARNING))
+    except Exception:
+        pass
+    await membre.kick(reason=raison)
+    await interaction.response.send_message(embed=firm1_embed(
+        "👢 Membre expulsé",
+        f"{membre.mention} a été expulsé.",
+        color=COLOR_WARNING,
+        fields=[("👤 Membre", str(membre), True), ("📝 Raison", raison, True), ("🛡️ Modérateur", interaction.user.mention, True)],
+    ))
+
+
+@tree.command(name="mute", description="[Modo] Rendre muet un membre (ex: 10m, 2h, 1j)")
+@app_commands.describe(membre="Le membre à mute", duree="Durée : 10m, 2h, 1j…", raison="Raison")
+@app_commands.checks.has_permissions(moderate_members=True)
+async def mute_cmd(interaction: discord.Interaction, membre: discord.Member, duree: str, raison: str = "Aucune raison fournie"):
+    secondes = parse_duration(duree)
+    if secondes is None:
+        await interaction.response.send_message(
+            embed=firm1_embed("Format invalide", "Utilisez un format valide : `10s`, `5m`, `2h`, `1j`.", color=COLOR_ERROR),
+            ephemeral=True,
+        )
+        return
+    if secondes > 2419200:  # 28 jours max (limite Discord)
+        await interaction.response.send_message(
+            embed=firm1_embed("Durée trop longue", "La durée maximale est **28 jours**.", color=COLOR_ERROR),
+            ephemeral=True,
+        )
+        return
+    until = discord.utils.utcnow() + datetime.timedelta(seconds=secondes)
+    await membre.timeout(until, reason=raison)
+    try:
+        await membre.send(embed=firm1_embed("🔇 Vous avez été mis en sourdine", f"**Serveur :** {interaction.guild.name}\n**Durée :** {duree}\n**Raison :** {raison}", color=COLOR_WARNING))
+    except Exception:
+        pass
+    await interaction.response.send_message(embed=firm1_embed(
+        "🔇 Membre mis en sourdine",
+        f"{membre.mention} est muet pendant **{duree}**.",
+        color=COLOR_WARNING,
+        fields=[("📝 Raison", raison, True), ("🛡️ Modérateur", interaction.user.mention, True), ("⏰ Fin", f"<t:{int(until.timestamp())}:R>", True)],
+    ))
+
+
+@tree.command(name="unmute", description="[Modo] Retirer le mute d'un membre")
+@app_commands.describe(membre="Le membre à unmute")
+@app_commands.checks.has_permissions(moderate_members=True)
+async def unmute_cmd(interaction: discord.Interaction, membre: discord.Member):
+    await membre.timeout(None)
+    await interaction.response.send_message(embed=firm1_embed(
+        "🔊 Mute retiré",
+        f"{membre.mention} peut à nouveau s'exprimer.",
+        color=COLOR_SUCCESS,
+        fields=[("🛡️ Modérateur", interaction.user.mention, True)],
+    ))
+
+
+@tree.command(name="warn", description="[Modo] Avertir un membre")
+@app_commands.describe(membre="Le membre à avertir", raison="Raison de l'avertissement")
+@app_commands.checks.has_permissions(kick_members=True)
+async def warn_cmd(interaction: discord.Interaction, membre: discord.Member, raison: str):
+    total = add_warn(interaction.guild.id, membre.id, raison, str(interaction.user))
+    try:
+        await membre.send(embed=firm1_embed(
+            "⚠️ Avertissement reçu",
+            f"**Serveur :** {interaction.guild.name}\n**Raison :** {raison}\n**Total :** {total} avertissement(s)",
+            color=COLOR_WARNING,
+        ))
+    except Exception:
+        pass
+    await interaction.response.send_message(embed=firm1_embed(
+        "⚠️ Membre averti",
+        f"{membre.mention} a reçu un avertissement.",
+        color=COLOR_WARNING,
+        fields=[("📝 Raison", raison, True), ("🛡️ Modérateur", interaction.user.mention, True), ("📊 Total warns", str(total), True)],
+    ))
+
+
+@tree.command(name="warns", description="Voir les avertissements d'un membre")
+@app_commands.describe(membre="Le membre à consulter")
+@app_commands.checks.has_permissions(kick_members=True)
+async def warns_cmd(interaction: discord.Interaction, membre: discord.Member):
+    warns = get_warns(interaction.guild.id, membre.id)
+    if not warns:
+        await interaction.response.send_message(
+            embed=firm1_embed("📋 Avertissements", f"{membre.mention} n'a aucun avertissement.", color=COLOR_SUCCESS),
+            ephemeral=True,
+        )
+        return
+    desc = "\n".join(f"**{i+1}.** {w['raison']} — *par {w['by']}*" for i, w in enumerate(warns))
+    await interaction.response.send_message(embed=firm1_embed(
+        f"⚠️ Avertissements de {membre.display_name}",
+        desc,
+        color=COLOR_WARNING,
+        fields=[("📊 Total", str(len(warns)), True)],
+    ), ephemeral=True)
+
+
+@tree.command(name="clear", description="[Modo] Supprimer des messages dans le salon")
+@app_commands.describe(nombre="Nombre de messages à supprimer (1-100)")
+@app_commands.checks.has_permissions(manage_messages=True)
+async def clear_cmd(interaction: discord.Interaction, nombre: int):
+    if not 1 <= nombre <= 100:
+        await interaction.response.send_message(
+            embed=firm1_embed("Erreur", "Le nombre doit être entre **1** et **100**.", color=COLOR_ERROR),
+            ephemeral=True,
+        )
+        return
+    await interaction.response.defer(ephemeral=True)
+    deleted = await interaction.channel.purge(limit=nombre)
+    await interaction.followup.send(embed=firm1_embed(
+        "🗑️ Messages supprimés",
+        f"**{len(deleted)}** message(s) supprimé(s).",
+        color=COLOR_SUCCESS,
+    ), ephemeral=True)
+
+
+# ── Auto-modération ────────────────────────────
+
+# Antispam : {guild_id: {user_id: [timestamps]}}
+spam_tracker: dict[int, dict[int, list]] = {}
+SPAM_LIMIT   = 5   # messages
+SPAM_WINDOW  = 5   # secondes
+
+@tree.command(name="config-auto-mod", description="[Admin] Voir la configuration de l'auto-modération")
+@app_commands.checks.has_permissions(administrator=True)
+async def config_automod(interaction: discord.Interaction):
+    cfg         = get_guild_config(interaction.guild.id)
+    bad_words   = cfg.get("bad_words", [])
+    no_link     = cfg.get("no_link_channels", [])
+    no_image    = cfg.get("no_image_channels", [])
+    no_link_ch  = [interaction.guild.get_channel(c) for c in no_link if interaction.guild.get_channel(c)]
+    no_image_ch = [interaction.guild.get_channel(c) for c in no_image if interaction.guild.get_channel(c)]
+
+    embed = discord.Embed(title="⚙️ Auto-Modération — Config", color=COLOR_PRIMARY, timestamp=datetime.datetime.utcnow())
+    embed.add_field(name="🤬 Mots interdits", value=", ".join(f"`{w}`" for w in bad_words) if bad_words else "❌ Aucun", inline=False)
+    embed.add_field(name="🔗 Salons sans liens", value=" ".join(c.mention for c in no_link_ch) if no_link_ch else "❌ Aucun", inline=False)
+    embed.add_field(name="🖼️ Salons sans images", value=" ".join(c.mention for c in no_image_ch) if no_image_ch else "❌ Aucun", inline=False)
+    embed.add_field(name="🚨 Antispam", value=f"Actif — **{SPAM_LIMIT} messages** en **{SPAM_WINDOW}s** → mute 5min", inline=False)
+    embed.add_field(name="🛠️ Commandes", value=(
+        "`/ajouter-mot-interdit <mot>` — Ajouter\n"
+        "`/retirer-mot-interdit <mot>` — Retirer\n"
+        "`/salon-no-lien [#salon]` — Toggle liens\n"
+        "`/salon-no-image [#salon]` — Toggle images"
+    ), inline=False)
+    embed.set_footer(text="Firm1 Bot • Support Gaming")
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+
+@tree.command(name="ajouter-mot-interdit", description="[Admin] Ajoute un mot interdit sur le serveur")
+@app_commands.describe(mot="Le mot à interdire")
+@app_commands.checks.has_permissions(administrator=True)
+async def add_bad_word(interaction: discord.Interaction, mot: str):
+    cfg       = get_guild_config(interaction.guild.id)
+    bad_words = cfg.get("bad_words", [])
+    mot       = mot.lower()
+    if mot in bad_words:
+        await interaction.response.send_message(
+            embed=firm1_embed("Déjà présent", f"`{mot}` est déjà dans la liste.", color=COLOR_WARNING),
+            ephemeral=True,
+        )
+        return
+    bad_words.append(mot)
+    set_guild_config(interaction.guild.id, "bad_words", bad_words)
+    await interaction.response.send_message(
+        embed=firm1_embed("✅ Mot ajouté", f"`{mot}` est désormais interdit.", color=COLOR_SUCCESS, fields=[("📊 Total", str(len(bad_words)), True)]),
+        ephemeral=True,
+    )
+
+
+@tree.command(name="retirer-mot-interdit", description="[Admin] Retire un mot interdit")
+@app_commands.describe(mot="Le mot à retirer")
+@app_commands.checks.has_permissions(administrator=True)
+async def remove_bad_word(interaction: discord.Interaction, mot: str):
+    cfg       = get_guild_config(interaction.guild.id)
+    bad_words = cfg.get("bad_words", [])
+    mot       = mot.lower()
+    if mot not in bad_words:
+        await interaction.response.send_message(
+            embed=firm1_embed("Introuvable", f"`{mot}` n'est pas dans la liste.", color=COLOR_WARNING),
+            ephemeral=True,
+        )
+        return
+    bad_words.remove(mot)
+    set_guild_config(interaction.guild.id, "bad_words", bad_words)
+    await interaction.response.send_message(
+        embed=firm1_embed("✅ Mot retiré", f"`{mot}` n'est plus interdit.", color=COLOR_SUCCESS),
+        ephemeral=True,
+    )
+
+
+@tree.command(name="salon-no-lien", description="[Admin] Active/désactive l'interdiction de liens dans un salon")
+@app_commands.describe(salon="Le salon concerné (défaut : salon actuel)")
+@app_commands.checks.has_permissions(administrator=True)
+async def toggle_no_link(interaction: discord.Interaction, salon: discord.TextChannel | None = None):
+    target    = salon or interaction.channel
+    cfg       = get_guild_config(interaction.guild.id)
+    no_link   = cfg.get("no_link_channels", [])
+    if target.id in no_link:
+        no_link.remove(target.id)
+        set_guild_config(interaction.guild.id, "no_link_channels", no_link)
+        await interaction.response.send_message(
+            embed=firm1_embed("✅ Liens autorisés", f"Les liens sont à nouveau autorisés dans {target.mention}.", color=COLOR_SUCCESS),
+            ephemeral=True,
+        )
+    else:
+        no_link.append(target.id)
+        set_guild_config(interaction.guild.id, "no_link_channels", no_link)
+        await interaction.response.send_message(
+            embed=firm1_embed("🔗 Liens interdits", f"Les liens sont désormais interdits dans {target.mention}.", color=COLOR_WARNING),
+            ephemeral=True,
+        )
+
+
+@tree.command(name="salon-no-image", description="[Admin] Active/désactive l'interdiction d'images dans un salon")
+@app_commands.describe(salon="Le salon concerné (défaut : salon actuel)")
+@app_commands.checks.has_permissions(administrator=True)
+async def toggle_no_image(interaction: discord.Interaction, salon: discord.TextChannel | None = None):
+    target    = salon or interaction.channel
+    cfg       = get_guild_config(interaction.guild.id)
+    no_image  = cfg.get("no_image_channels", [])
+    if target.id in no_image:
+        no_image.remove(target.id)
+        set_guild_config(interaction.guild.id, "no_image_channels", no_image)
+        await interaction.response.send_message(
+            embed=firm1_embed("✅ Images autorisées", f"Les images sont à nouveau autorisées dans {target.mention}.", color=COLOR_SUCCESS),
+            ephemeral=True,
+        )
+    else:
+        no_image.append(target.id)
+        set_guild_config(interaction.guild.id, "no_image_channels", no_image)
+        await interaction.response.send_message(
+            embed=firm1_embed("🖼️ Images interdites", f"Les images sont désormais interdites dans {target.mention}.", color=COLOR_WARNING),
+            ephemeral=True,
+        )
+
+
+# ── Listener auto-mod (on_message) ────────────
+
+@bot.event
+async def on_message(message: discord.Message):
+    if message.author.bot or not message.guild:
+        return
+
+    cfg       = get_guild_config(message.guild.id)
+    whitelist = cfg.get("whitelist", [])
+
+    # ── Whitelist : bypass total de l'auto-mod ──
+    if message.author.id in whitelist:
+        await bot.process_commands(message)
+        return
+
+    bad_words = cfg.get("bad_words", [])
+    no_link   = cfg.get("no_link_channels", [])
+    no_image  = cfg.get("no_image_channels", [])
+    content   = message.content.lower()
+
+    # ── Mots interdits ──
+    for word in bad_words:
+        if word in content:
+            await message.delete()
+            try:
+                await message.author.send(embed=firm1_embed(
+                    "🚫 Message supprimé",
+                    f"Votre message dans **{message.guild.name}** contient un mot interdit.",
+                    color=COLOR_ERROR,
+                ))
+            except Exception:
+                pass
+            return
+
+    # ── Liens interdits ──
+    url_pattern = re.compile(r"https?://\S+|discord\.gg/\S+", re.IGNORECASE)
+    if message.channel.id in no_link and url_pattern.search(message.content):
+        await message.delete()
+        warn_msg = await message.channel.send(
+            embed=firm1_embed("🔗 Lien interdit", f"{message.author.mention}, les liens sont interdits dans ce salon.", color=COLOR_ERROR),
+        )
+        await asyncio.sleep(5)
+        await warn_msg.delete()
+        return
+
+    # ── Images interdites ──
+    if message.channel.id in no_image and (message.attachments or any(e.image for e in message.embeds)):
+        await message.delete()
+        warn_msg = await message.channel.send(
+            embed=firm1_embed("🖼️ Image interdite", f"{message.author.mention}, les images sont interdites dans ce salon.", color=COLOR_ERROR),
+        )
+        await asyncio.sleep(5)
+        await warn_msg.delete()
+        return
+
+    # ── Antispam ──
+    guild_id  = message.guild.id
+    user_id   = message.author.id
+    now       = datetime.datetime.utcnow().timestamp()
+    whitelist = cfg.get("whitelist", [])
+
+    # Les membres en whitelist ignorent l'antispam aussi
+    if user_id not in whitelist:
+        if guild_id not in spam_tracker:
+            spam_tracker[guild_id] = {}
+        if user_id not in spam_tracker[guild_id]:
+            spam_tracker[guild_id][user_id] = []
+
+        timestamps = spam_tracker[guild_id][user_id]
+        timestamps.append(now)
+        spam_tracker[guild_id][user_id] = [t for t in timestamps if now - t < SPAM_WINDOW]
+
+        if len(spam_tracker[guild_id][user_id]) >= SPAM_LIMIT:
+            spam_tracker[guild_id][user_id] = []
+            try:
+                until = discord.utils.utcnow() + datetime.timedelta(minutes=5)
+                await message.author.timeout(until, reason="Antispam automatique")
+                await message.channel.send(embed=firm1_embed(
+                    "🚨 Spam détecté",
+                    f"{message.author.mention} a été mis en sourdine **5 minutes** pour spam.",
+                    color=COLOR_ERROR,
+                ))
+            except Exception:
+                pass
+
+    await bot.process_commands(message)
+
+
+# ── Blacklist : kick automatique à l'arrivée ──
+
+@bot.event
+async def on_member_join(member: discord.Member):
+    cfg       = get_guild_config(member.guild.id)
+    blacklist = cfg.get("blacklist", [])
+    if member.id in blacklist:
+        try:
+            await member.send(embed=firm1_embed(
+                "⛔ Accès refusé",
+                f"Vous êtes sur la blacklist du serveur **{member.guild.name}** et ne pouvez pas le rejoindre.",
+                color=COLOR_ERROR,
+            ))
+        except Exception:
+            pass
+        await member.kick(reason="Membre blacklisté")
+
+
+# ─────────────────────────────────────────────
+#  WHITELIST & BLACKLIST
+# ─────────────────────────────────────────────
+
+@tree.command(name="whitelist-ajouter", description="[Admin] Ajoute un membre à la whitelist (bypass auto-mod)")
+@app_commands.describe(membre="Le membre à whitelister")
+@app_commands.checks.has_permissions(administrator=True)
+async def whitelist_add(interaction: discord.Interaction, membre: discord.Member):
+    cfg       = get_guild_config(interaction.guild.id)
+    whitelist = cfg.get("whitelist", [])
+    if membre.id in whitelist:
+        await interaction.response.send_message(
+            embed=firm1_embed("Déjà présent", f"{membre.mention} est déjà dans la whitelist.", color=COLOR_WARNING),
+            ephemeral=True,
+        )
+        return
+    whitelist.append(membre.id)
+    set_guild_config(interaction.guild.id, "whitelist", whitelist)
+    await interaction.response.send_message(embed=firm1_embed(
+        "✅ Whitelist — Membre ajouté",
+        f"{membre.mention} peut désormais contourner toutes les restrictions de l'auto-modération.",
+        color=COLOR_SUCCESS,
+        fields=[
+            ("👤 Membre", f"{membre} (`{membre.id}`)", True),
+            ("📊 Total whitelist", str(len(whitelist)), True),
+        ],
+    ), ephemeral=True)
+
+
+@tree.command(name="whitelist-retirer", description="[Admin] Retire un membre de la whitelist")
+@app_commands.describe(membre="Le membre à retirer")
+@app_commands.checks.has_permissions(administrator=True)
+async def whitelist_remove(interaction: discord.Interaction, membre: discord.Member):
+    cfg       = get_guild_config(interaction.guild.id)
+    whitelist = cfg.get("whitelist", [])
+    if membre.id not in whitelist:
+        await interaction.response.send_message(
+            embed=firm1_embed("Introuvable", f"{membre.mention} n'est pas dans la whitelist.", color=COLOR_WARNING),
+            ephemeral=True,
+        )
+        return
+    whitelist.remove(membre.id)
+    set_guild_config(interaction.guild.id, "whitelist", whitelist)
+    await interaction.response.send_message(embed=firm1_embed(
+        "✅ Whitelist — Membre retiré",
+        f"{membre.mention} est soumis à nouveau aux restrictions de l'auto-modération.",
+        color=COLOR_SUCCESS,
+    ), ephemeral=True)
+
+
+@tree.command(name="whitelist-liste", description="[Admin] Affiche tous les membres whitelistés")
+@app_commands.checks.has_permissions(administrator=True)
+async def whitelist_list(interaction: discord.Interaction):
+    cfg       = get_guild_config(interaction.guild.id)
+    whitelist = cfg.get("whitelist", [])
+    membres   = [interaction.guild.get_member(uid) for uid in whitelist]
+    membres   = [m for m in membres if m]
+    if not membres:
+        await interaction.response.send_message(
+            embed=firm1_embed("📋 Whitelist", "Aucun membre whitelisté.", color=COLOR_INFO),
+            ephemeral=True,
+        )
+        return
+    desc = "\n".join(f"• {m.mention} — `{m.id}`" for m in membres)
+    await interaction.response.send_message(embed=firm1_embed(
+        "📋 Whitelist",
+        desc,
+        color=COLOR_INFO,
+        fields=[("📊 Total", str(len(membres)), True)],
+    ), ephemeral=True)
+
+
+@tree.command(name="blacklist-ajouter", description="[Admin] Ajoute un membre à la blacklist (expulsé automatiquement)")
+@app_commands.describe(membre="Le membre à blacklister", raison="Raison")
+@app_commands.checks.has_permissions(administrator=True)
+async def blacklist_add(interaction: discord.Interaction, membre: discord.Member, raison: str = "Aucune raison fournie"):
+    cfg       = get_guild_config(interaction.guild.id)
+    blacklist = cfg.get("blacklist", [])
+    if membre.id in blacklist:
+        await interaction.response.send_message(
+            embed=firm1_embed("Déjà présent", f"{membre.mention} est déjà dans la blacklist.", color=COLOR_WARNING),
+            ephemeral=True,
+        )
+        return
+    blacklist.append(membre.id)
+    set_guild_config(interaction.guild.id, "blacklist", blacklist)
+    # Kick immédiat si déjà sur le serveur
+    try:
+        await membre.send(embed=firm1_embed(
+            "⛔ Vous avez été blacklisté",
+            f"Vous avez été ajouté à la blacklist de **{interaction.guild.name}**.\n**Raison :** {raison}",
+            color=COLOR_ERROR,
+        ))
+    except Exception:
+        pass
+    await membre.kick(reason=f"Blacklist : {raison}")
+    await interaction.response.send_message(embed=firm1_embed(
+        "⛔ Blacklist — Membre ajouté",
+        f"{membre.mention} a été blacklisté et expulsé. Il sera automatiquement expulsé s'il tente de revenir.",
+        color=COLOR_ERROR,
+        fields=[
+            ("👤 Membre", f"{membre} (`{membre.id}`)", True),
+            ("📝 Raison", raison, True),
+            ("📊 Total blacklist", str(len(blacklist)), True),
+        ],
+    ), ephemeral=True)
+
+
+@tree.command(name="blacklist-retirer", description="[Admin] Retire un membre de la blacklist")
+@app_commands.describe(membre="Le membre à retirer (peut ne plus être sur le serveur)")
+@app_commands.checks.has_permissions(administrator=True)
+async def blacklist_remove(interaction: discord.Interaction, membre: discord.User):
+    cfg       = get_guild_config(interaction.guild.id)
+    blacklist = cfg.get("blacklist", [])
+    if membre.id not in blacklist:
+        await interaction.response.send_message(
+            embed=firm1_embed("Introuvable", f"{membre.mention} n'est pas dans la blacklist.", color=COLOR_WARNING),
+            ephemeral=True,
+        )
+        return
+    blacklist.remove(membre.id)
+    set_guild_config(interaction.guild.id, "blacklist", blacklist)
+    await interaction.response.send_message(embed=firm1_embed(
+        "✅ Blacklist — Membre retiré",
+        f"**{membre}** peut à nouveau rejoindre le serveur.",
+        color=COLOR_SUCCESS,
+    ), ephemeral=True)
+
+
+@tree.command(name="blacklist-liste", description="[Admin] Affiche tous les membres blacklistés")
+@app_commands.checks.has_permissions(administrator=True)
+async def blacklist_list(interaction: discord.Interaction):
+    cfg       = get_guild_config(interaction.guild.id)
+    blacklist = cfg.get("blacklist", [])
+    if not blacklist:
+        await interaction.response.send_message(
+            embed=firm1_embed("📋 Blacklist", "Aucun membre blacklisté.", color=COLOR_INFO),
+            ephemeral=True,
+        )
+        return
+    desc = "\n".join(f"• `{uid}`" for uid in blacklist)
+    await interaction.response.send_message(embed=firm1_embed(
+        "📋 Blacklist",
+        desc,
+        color=COLOR_ERROR,
+        fields=[("📊 Total", str(len(blacklist)), True)],
+    ), ephemeral=True)
+
+
+
 if __name__ == "__main__":
     # keep_alive() uniquement si le module est disponible (Replit)
     # Sur Render, le process tourne nativement en continu — inutile
