@@ -282,6 +282,18 @@ COMMANDS_DETAIL = {
         "category": "🔨 Modération",
     },
     # Auto-mod
+    "config-antispam": {
+        "usage": "/config-antispam [limite] [fenetre] [mute_minutes] [actif]",
+        "description": "Personnalise les paramètres de l'antispam par serveur. Chaque argument est optionnel — seuls les paramètres fournis sont modifiés.",
+        "args": [
+            ("limite",       "Optionnel", "Nombre de messages avant sanction (2–50, défaut : 5)."),
+            ("fenetre",      "Optionnel", "Fenêtre de temps en secondes (1–60, défaut : 5)."),
+            ("mute_minutes", "Optionnel", "Durée du mute en minutes (1–1440, défaut : 5)."),
+            ("actif",        "Optionnel", "true pour activer, false pour désactiver."),
+        ],
+        "perms": "Administrateur",
+        "category": "🤖 Auto-Modération",
+    },
     "config-auto-mod": {
         "usage": "/config-auto-mod",
         "description": "Affiche la configuration complète de l'auto-modération : mots interdits, salons restreints, antispam.",
@@ -541,6 +553,7 @@ async def help_cmd(interaction: discord.Interaction, commande: str | None = None
             fields=[
                 ("⚙️ Configuration *(admin)*", (
                     "`/config-auto-mod` — Voir toute la config\n"
+                    "`/config-antispam` — Personnaliser l'antispam\n"
                     "`/ajouter-mot-interdit <mot>` — Ajouter un mot interdit\n"
                     "`/retirer-mot-interdit <mot>` — Retirer un mot interdit\n"
                     "`/salon-no-lien [#salon]` — Toggle interdiction liens\n"
@@ -1922,8 +1935,10 @@ async def clear_cmd(interaction: discord.Interaction, nombre: int):
 
 # Antispam : {guild_id: {user_id: [timestamps]}}
 spam_tracker: dict[int, dict[int, list]] = {}
-SPAM_LIMIT   = 5   # messages
-SPAM_WINDOW  = 5   # secondes
+# Valeurs par défaut (overridables par serveur via /config-antispam)
+SPAM_LIMIT_DEFAULT  = 5    # messages
+SPAM_WINDOW_DEFAULT = 5    # secondes
+SPAM_MUTE_DEFAULT   = 5    # minutes de mute
 
 @tree.command(name="config-auto-mod", description="[Admin] Voir la configuration de l'auto-modération")
 @app_commands.checks.has_permissions(administrator=True)
@@ -1934,23 +1949,105 @@ async def config_automod(interaction: discord.Interaction):
     no_image    = cfg.get("no_image_channels", [])
     no_link_ch  = [interaction.guild.get_channel(c) for c in no_link if interaction.guild.get_channel(c)]
     no_image_ch = [interaction.guild.get_channel(c) for c in no_image if interaction.guild.get_channel(c)]
+    spam_limit  = cfg.get("spam_limit",  SPAM_LIMIT_DEFAULT)
+    spam_window = cfg.get("spam_window", SPAM_WINDOW_DEFAULT)
+    spam_mute   = cfg.get("spam_mute",   SPAM_MUTE_DEFAULT)
+    spam_active = cfg.get("spam_active", True)
 
     embed = discord.Embed(title="⚙️ Auto-Modération — Config", color=COLOR_PRIMARY, timestamp=datetime.datetime.utcnow())
     embed.add_field(name="🤬 Mots interdits", value=", ".join(f"`{w}`" for w in bad_words) if bad_words else "❌ Aucun", inline=False)
     embed.add_field(name="🔗 Salons sans liens", value=" ".join(c.mention for c in no_link_ch) if no_link_ch else "❌ Aucun", inline=False)
     embed.add_field(name="🖼️ Salons sans images", value=" ".join(c.mention for c in no_image_ch) if no_image_ch else "❌ Aucun", inline=False)
-    embed.add_field(name="🚨 Antispam", value=f"Actif — **{SPAM_LIMIT} messages** en **{SPAM_WINDOW}s** → mute 5min", inline=False)
+    embed.add_field(
+        name="🚨 Antispam",
+        value=(
+            f"{'🟢 Actif' if spam_active else '🔴 Désactivé'}\n"
+            f"**Seuil :** {spam_limit} messages en {spam_window}s\n"
+            f"**Sanction :** mute {spam_mute} minute(s)\n"
+            f"*Modifiez avec `/config-antispam`*"
+        ),
+        inline=False,
+    )
     embed.add_field(name="🛠️ Commandes", value=(
-        "`/ajouter-mot-interdit <mot>` — Ajouter\n"
-        "`/retirer-mot-interdit <mot>` — Retirer\n"
+        "`/ajouter-mot-interdit <mot>` — Ajouter un mot interdit\n"
+        "`/retirer-mot-interdit <mot>` — Retirer un mot interdit\n"
         "`/salon-no-lien [#salon]` — Toggle liens\n"
-        "`/salon-no-image [#salon]` — Toggle images"
+        "`/salon-no-image [#salon]` — Toggle images\n"
+        "`/config-antispam` — Configurer l'antispam"
     ), inline=False)
     embed.set_footer(text="Firm1 Bot • Support Gaming")
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
-@tree.command(name="ajouter-mot-interdit", description="[Admin] Ajoute un mot interdit sur le serveur")
+@tree.command(name="config-antispam", description="[Admin] Personnalise les paramètres de l'antispam")
+@app_commands.describe(
+    limite="Nombre de messages avant sanction (défaut : 5)",
+    fenetre="Fenêtre de temps en secondes (défaut : 5)",
+    mute_minutes="Durée du mute en minutes (défaut : 5)",
+    actif="Activer ou désactiver l'antispam",
+)
+@app_commands.checks.has_permissions(administrator=True)
+async def config_antispam(
+    interaction: discord.Interaction,
+    limite:       int  | None = None,
+    fenetre:      int  | None = None,
+    mute_minutes: int  | None = None,
+    actif:        bool | None = None,
+):
+    cfg = get_guild_config(interaction.guild.id)
+
+    # Appliquer uniquement les valeurs fournies
+    if limite is not None:
+        if not 2 <= limite <= 50:
+            await interaction.response.send_message(
+                embed=firm1_embed("Valeur invalide", "La limite doit être entre **2** et **50** messages.", color=COLOR_ERROR),
+                ephemeral=True,
+            )
+            return
+        set_guild_config(interaction.guild.id, "spam_limit", limite)
+
+    if fenetre is not None:
+        if not 1 <= fenetre <= 60:
+            await interaction.response.send_message(
+                embed=firm1_embed("Valeur invalide", "La fenêtre doit être entre **1** et **60** secondes.", color=COLOR_ERROR),
+                ephemeral=True,
+            )
+            return
+        set_guild_config(interaction.guild.id, "spam_window", fenetre)
+
+    if mute_minutes is not None:
+        if not 1 <= mute_minutes <= 1440:
+            await interaction.response.send_message(
+                embed=firm1_embed("Valeur invalide", "La durée de mute doit être entre **1** et **1440** minutes (24h).", color=COLOR_ERROR),
+                ephemeral=True,
+            )
+            return
+        set_guild_config(interaction.guild.id, "spam_mute", mute_minutes)
+
+    if actif is not None:
+        set_guild_config(interaction.guild.id, "spam_active", actif)
+
+    # Lire la config finale
+    cfg         = get_guild_config(interaction.guild.id)
+    spam_limit  = cfg.get("spam_limit",  SPAM_LIMIT_DEFAULT)
+    spam_window = cfg.get("spam_window", SPAM_WINDOW_DEFAULT)
+    spam_mute   = cfg.get("spam_mute",   SPAM_MUTE_DEFAULT)
+    spam_active = cfg.get("spam_active", True)
+
+    embed = firm1_embed(
+        title="🚨 Antispam — Configuration mise à jour",
+        description=f"{'🟢 Antispam **activé**' if spam_active else '🔴 Antispam **désactivé**'}",
+        color=COLOR_SUCCESS if spam_active else COLOR_WARNING,
+        fields=[
+            ("📨 Seuil",    f"**{spam_limit}** messages",     True),
+            ("⏱️ Fenêtre",  f"**{spam_window}** secondes",    True),
+            ("🔇 Sanction", f"Mute **{spam_mute}** minute(s)", True),
+            ("💡 Exemple",  f"Si un membre envoie **{spam_limit}+ messages** en moins de **{spam_window}s**, il est muet **{spam_mute} min**.", False),
+        ],
+    )
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+
 @app_commands.describe(mot="Le mot à interdire")
 @app_commands.checks.has_permissions(administrator=True)
 async def add_bad_word(interaction: discord.Interaction, mot: str):
@@ -2094,13 +2191,18 @@ async def on_message(message: discord.Message):
         return
 
     # ── Antispam ──
-    guild_id  = message.guild.id
-    user_id   = message.author.id
-    now       = datetime.datetime.utcnow().timestamp()
-    whitelist = cfg.get("whitelist", [])
+    guild_id    = message.guild.id
+    user_id     = message.author.id
+    now         = datetime.datetime.utcnow().timestamp()
+    whitelist   = cfg.get("whitelist", [])
+    spam_active = cfg.get("spam_active", True)
 
     # Les membres en whitelist ignorent l'antispam aussi
-    if user_id not in whitelist:
+    if user_id not in whitelist and spam_active:
+        spam_limit  = cfg.get("spam_limit",  SPAM_LIMIT_DEFAULT)
+        spam_window = cfg.get("spam_window", SPAM_WINDOW_DEFAULT)
+        spam_mute   = cfg.get("spam_mute",   SPAM_MUTE_DEFAULT)
+
         if guild_id not in spam_tracker:
             spam_tracker[guild_id] = {}
         if user_id not in spam_tracker[guild_id]:
@@ -2108,16 +2210,16 @@ async def on_message(message: discord.Message):
 
         timestamps = spam_tracker[guild_id][user_id]
         timestamps.append(now)
-        spam_tracker[guild_id][user_id] = [t for t in timestamps if now - t < SPAM_WINDOW]
+        spam_tracker[guild_id][user_id] = [t for t in timestamps if now - t < spam_window]
 
-        if len(spam_tracker[guild_id][user_id]) >= SPAM_LIMIT:
+        if len(spam_tracker[guild_id][user_id]) >= spam_limit:
             spam_tracker[guild_id][user_id] = []
             try:
-                until = discord.utils.utcnow() + datetime.timedelta(minutes=5)
+                until = discord.utils.utcnow() + datetime.timedelta(minutes=spam_mute)
                 await message.author.timeout(until, reason="Antispam automatique")
                 await message.channel.send(embed=firm1_embed(
                     "🚨 Spam détecté",
-                    f"{message.author.mention} a été mis en sourdine **5 minutes** pour spam.",
+                    f"{message.author.mention} a été mis en sourdine **{spam_mute} minute(s)** pour spam.",
                     color=COLOR_ERROR,
                 ))
             except Exception:
