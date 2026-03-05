@@ -2142,7 +2142,70 @@ async def on_message(message: discord.Message):
     if message.author.bot or not message.guild:
         return
 
-    cfg       = get_guild_config(message.guild.id)
+    # ── Ping / mention du bot → carte de présentation ──
+    if bot.user in message.mentions and message.content.strip() in (f"<@{bot.user.id}>", f"<@!{bot.user.id}>"):
+        cfg        = get_guild_config(message.guild.id)
+        categories = cfg.get("ticket_categories", [])
+        bad_words  = cfg.get("bad_words", [])
+        no_link    = cfg.get("no_link_channels", [])
+        no_image   = cfg.get("no_image_channels", [])
+
+        embed = discord.Embed(
+            title="👾  Firm1 Bot",
+            description=(
+                "```\n"
+                "  Le bot officiel de la communauté Firm1.\n"
+                "  Support • Modération • Mini-Jeux\n"
+                "```\n"
+                "Tapez `/help` pour voir toutes les commandes.\n"
+                "Tapez `/help <commande>` pour les détails d'une commande."
+            ),
+            color=COLOR_PRIMARY,
+            timestamp=datetime.datetime.utcnow(),
+        )
+
+        # Stats du serveur
+        embed.add_field(
+            name="📊 Stats sur ce serveur",
+            value=(
+                f"🎫 Catégories tickets : **{len(categories)}**\n"
+                f"🚫 Mots interdits : **{len(bad_words)}**\n"
+                f"🔗 Salons sans liens : **{len(no_link)}**\n"
+                f"🖼️ Salons sans images : **{len(no_image)}**"
+            ),
+            inline=True,
+        )
+
+        # Fonctionnalités
+        embed.add_field(
+            name="⚡ Fonctionnalités",
+            value=(
+                "🎫 Système de tickets\n"
+                "🔨 Modération complète\n"
+                "🤖 Auto-modération\n"
+                "🛡️ Whitelist & Blacklist\n"
+                "🎮 Mini-jeux"
+            ),
+            inline=True,
+        )
+
+        embed.add_field(
+            name="🔗 Commandes rapides",
+            value=(
+                "`/help` — Aide complète\n"
+                "`/panel-tickets` — Panel support\n"
+                "`/config-tickets` — Config tickets\n"
+                "`/config-auto-mod` — Auto-mod"
+            ),
+            inline=False,
+        )
+
+        embed.set_thumbnail(url=bot.user.display_avatar.url)
+        embed.set_footer(text=f"Firm1 Bot • Sur {len(bot.guilds)} serveur(s)")
+        await message.reply(embed=embed, mention_author=False)
+        return
+
+    cfg = get_guild_config(message.guild.id)
     whitelist = cfg.get("whitelist", [])
 
     # ── Whitelist : bypass total de l'auto-mod ──
