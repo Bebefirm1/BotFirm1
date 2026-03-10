@@ -2068,23 +2068,34 @@ async def add_bad_word(interaction: discord.Interaction, mot: str):
     )
 
 
-@tree.command(name="ajouter-mot-interdit", description="[Admin] Ajoute un mot interdit sur le serveur")
-@app_commands.describe(mot="Le mot à interdire")
+@tree.command(name="ajouter-mot-interdit", description="[Admin] Ajoute un ou plusieurs mots interdits (séparés par _)")
+@app_commands.describe(mot="Un ou plusieurs mots séparés par _ (ex: mot1_mot2_mot3)")
 @app_commands.checks.has_permissions(administrator=True)
 async def add_bad_word(interaction: discord.Interaction, mot: str):
     cfg       = get_guild_config(interaction.guild.id)
     bad_words = cfg.get("bad_words", [])
-    mot       = mot.lower()
-    if mot in bad_words:
-        await interaction.response.send_message(
-            embed=firm1_embed("Déjà présent", f"`{mot}` est déjà dans la liste.", color=COLOR_WARNING),
-            ephemeral=True,
-        )
-        return
-    bad_words.append(mot)
-    set_guild_config(interaction.guild.id, "bad_words", bad_words)
+
+    nouveaux  = [m.strip().lower() for m in mot.split("_") if m.strip()]
+    deja      = [m for m in nouveaux if m in bad_words]
+    ajoutes   = [m for m in nouveaux if m not in bad_words]
+
+    if ajoutes:
+        bad_words.extend(ajoutes)
+        set_guild_config(interaction.guild.id, "bad_words", bad_words)
+
+    fields = [("📊 Total", str(len(bad_words)), True)]
+    if ajoutes:
+        fields.append(("✅ Ajoutés", ", ".join(f"`{m}`" for m in ajoutes), False))
+    if deja:
+        fields.append(("⚠️ Déjà présents", ", ".join(f"`{m}`" for m in deja), False))
+
     await interaction.response.send_message(
-        embed=firm1_embed("✅ Mot ajouté", f"`{mot}` est désormais interdit.", color=COLOR_SUCCESS, fields=[("📊 Total", str(len(bad_words)), True)]),
+        embed=firm1_embed(
+            "✅ Mots interdits mis à jour" if ajoutes else "⚠️ Aucun mot ajouté",
+            f"**{len(ajoutes)}** mot(s) ajouté(s), **{len(deja)}** déjà présent(s).",
+            color=COLOR_SUCCESS if ajoutes else COLOR_WARNING,
+            fields=fields,
+        ),
         ephemeral=True,
     )
 
