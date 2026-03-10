@@ -1,4 +1,4 @@
-"""
+""" 
 ╔══════════════════════════════════════════════════════════╗
 ║           🎮 FIRM1 — Bot de Gestion Discord             ║
 ║          Tickets • Support • Mini-Jeux • Utilitaires     ║
