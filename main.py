@@ -301,17 +301,24 @@ COMMANDS_DETAIL = {
         "perms": "Administrateur",
         "category": "🤖 Auto-Modération",
     },
-    "ajouter-mot-interdit": {
-        "usage": "/ajouter-mot-interdit <mot>",
+    "ajouter-badword": {
+        "usage": "/ajouter-badword <mot(s)>",
         "description": "Ajoute un mot à la liste noire. Tout message contenant ce mot sera supprimé automatiquement.",
         "args": [("mot", "Requis", "Le mot à interdire (insensible à la casse).")],
         "perms": "Administrateur",
         "category": "🤖 Auto-Modération",
     },
-    "retirer-mot-interdit": {
-        "usage": "/retirer-mot-interdit <mot>",
+    "retirer-badword": {
+        "usage": "/retirer-badword <mot>",
         "description": "Retire un mot de la liste noire.",
         "args": [("mot", "Requis", "Le mot à retirer.")],
+        "perms": "Administrateur",
+        "category": "🤖 Auto-Modération",
+    },
+    "liste-badwords": {
+        "usage": "/liste-badwords",
+        "description": "Affiche la liste complète de tous les mots interdits configurés sur le serveur.",
+        "args": [],
         "perms": "Administrateur",
         "category": "🤖 Auto-Modération",
     },
@@ -554,8 +561,9 @@ async def help_cmd(interaction: discord.Interaction, commande: str | None = None
                 ("⚙️ Configuration *(admin)*", (
                     "`/config-auto-mod` — Voir toute la config\n"
                     "`/config-antispam` — Personnaliser l'antispam\n"
-                    "`/ajouter-mot-interdit <mot>` — Ajouter un mot interdit\n"
-                    "`/retirer-mot-interdit <mot>` — Retirer un mot interdit\n"
+                    "`/ajouter-badword <mot(s)>` — Ajouter un/des badword(s)\n"
+                    "`/retirer-badword <mot>` — Retirer un badword\n"
+                    "`/liste-badwords` — Voir tous les badwords\n"
                     "`/salon-no-lien [#salon]` — Toggle interdiction liens\n"
                     "`/salon-no-image [#salon]` — Toggle interdiction images"
                 ), False),
@@ -1969,8 +1977,9 @@ async def config_automod(interaction: discord.Interaction):
         inline=False,
     )
     embed.add_field(name="🛠️ Commandes", value=(
-        "`/ajouter-mot-interdit <mot>` — Ajouter un mot interdit\n"
-        "`/retirer-mot-interdit <mot>` — Retirer un mot interdit\n"
+        "`/ajouter-badword <mot(s)>` — Ajouter un/des badword(s)\n"
+        "`/retirer-badword <mot>` — Retirer un badword\n"
+        "`/liste-badwords` — Voir tous les badwords\n"
         "`/salon-no-lien [#salon]` — Toggle liens\n"
         "`/salon-no-image [#salon]` — Toggle images\n"
         "`/config-antispam` — Configurer l'antispam"
@@ -2068,7 +2077,7 @@ async def add_bad_word(interaction: discord.Interaction, mot: str):
     )
 
 
-@tree.command(name="ajouter-mot-interdit", description="[Admin] Ajoute un ou plusieurs mots interdits (séparés par _)")
+@tree.command(name="ajouter-badword", description="[Admin] Ajoute un ou plusieurs badwords (séparés par _)")
 @app_commands.describe(mot="Un ou plusieurs mots séparés par _ (ex: mot1_mot2_mot3)")
 @app_commands.checks.has_permissions(administrator=True)
 async def add_bad_word(interaction: discord.Interaction, mot: str):
@@ -2100,7 +2109,7 @@ async def add_bad_word(interaction: discord.Interaction, mot: str):
     )
 
 
-@tree.command(name="retirer-mot-interdit", description="[Admin] Retire un mot interdit")
+@tree.command(name="retirer-badword", description="[Admin] Retire un badword")
 @app_commands.describe(mot="Le mot à retirer")
 @app_commands.checks.has_permissions(administrator=True)
 async def remove_bad_word(interaction: discord.Interaction, mot: str):
@@ -2117,6 +2126,33 @@ async def remove_bad_word(interaction: discord.Interaction, mot: str):
     set_guild_config(interaction.guild.id, "bad_words", bad_words)
     await interaction.response.send_message(
         embed=firm1_embed("✅ Mot retiré", f"`{mot}` n'est plus interdit.", color=COLOR_SUCCESS),
+        ephemeral=True,
+    )
+
+
+@tree.command(name="liste-badwords", description="[Admin] Affiche tous les mots interdits")
+@app_commands.checks.has_permissions(administrator=True)
+async def list_bad_words(interaction: discord.Interaction):
+    cfg       = get_guild_config(interaction.guild.id)
+    bad_words = cfg.get("bad_words", [])
+    if not bad_words:
+        await interaction.response.send_message(
+            embed=firm1_embed("📋 Badwords", "Aucun mot interdit configuré.", color=COLOR_INFO),
+            ephemeral=True,
+        )
+        return
+    # Découper en pages de 30 mots si la liste est longue
+    mots_text = ", ".join(f"`{w}`" for w in bad_words)
+    # Tronquer si trop long pour l'embed
+    if len(mots_text) > 1000:
+        mots_text = mots_text[:997] + "..."
+    await interaction.response.send_message(
+        embed=firm1_embed(
+            "📋 Liste des Badwords",
+            mots_text,
+            color=COLOR_WARNING,
+            fields=[("📊 Total", str(len(bad_words)), True)],
+        ),
         ephemeral=True,
     )
 
