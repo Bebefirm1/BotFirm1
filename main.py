@@ -2068,6 +2068,27 @@ async def add_bad_word(interaction: discord.Interaction, mot: str):
     )
 
 
+@tree.command(name="ajouter-mot-interdit", description="[Admin] Ajoute un mot interdit sur le serveur")
+@app_commands.describe(mot="Le mot à interdire")
+@app_commands.checks.has_permissions(administrator=True)
+async def add_bad_word(interaction: discord.Interaction, mot: str):
+    cfg       = get_guild_config(interaction.guild.id)
+    bad_words = cfg.get("bad_words", [])
+    mot       = mot.lower()
+    if mot in bad_words:
+        await interaction.response.send_message(
+            embed=firm1_embed("Déjà présent", f"`{mot}` est déjà dans la liste.", color=COLOR_WARNING),
+            ephemeral=True,
+        )
+        return
+    bad_words.append(mot)
+    set_guild_config(interaction.guild.id, "bad_words", bad_words)
+    await interaction.response.send_message(
+        embed=firm1_embed("✅ Mot ajouté", f"`{mot}` est désormais interdit.", color=COLOR_SUCCESS, fields=[("📊 Total", str(len(bad_words)), True)]),
+        ephemeral=True,
+    )
+
+
 @tree.command(name="retirer-mot-interdit", description="[Admin] Retire un mot interdit")
 @app_commands.describe(mot="Le mot à retirer")
 @app_commands.checks.has_permissions(administrator=True)
