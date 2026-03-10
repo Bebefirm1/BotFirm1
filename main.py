@@ -1,4 +1,4 @@
-""" 
+"""
 ╔══════════════════════════════════════════════════════════╗
 ║           🎮 FIRM1 — Bot de Gestion Discord             ║
 ║          Tickets • Support • Mini-Jeux • Utilitaires     ║
@@ -2287,8 +2287,12 @@ async def on_message(message: discord.Message):
     content   = message.content.lower()
 
     # ── Mots interdits ──
+    # Utilise des séparateurs explicites pour mieux gérer le français (accents, etc.)
+    content_spaced = f" {content} "
     for word in bad_words:
-        if word in content:
+        # Méthode 1 : mot entouré d'espaces/ponctuation (plus fiable pour le français)
+        pattern = re.compile(r'(?<![a-zA-ZÀ-ÿ])' + re.escape(word) + r'(?![a-zA-ZÀ-ÿ])', re.IGNORECASE)
+        if pattern.search(content_spaced):
             await message.delete()
             try:
                 await message.author.send(embed=firm1_embed(
