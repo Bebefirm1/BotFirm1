@@ -289,25 +289,32 @@ async def help_cmd(interaction: discord.Interaction, commande: str | None = None
         await interaction.response.send_message(embed=embed, ephemeral=True)
         return
 
+    def make_page(title, description, color, fields):
+        e = discord.Embed(title=title, description=description, color=color)
+        e.set_footer(text="Firm1 Bot • Support Gaming")
+        for name, value, inline in fields:
+            e.add_field(name=name, value=value, inline=inline)
+        return e
+
     pages = [
-        firm1_embed("Firm1 Bot — 🎫 Tickets (1/5)", "Système de tickets de support.\nℹ️ `/help <commande>` pour plus de détails.", color=COLOR_PRIMARY, fields=[
-            ("📩 Membres", "`/ticket [raison]` — Ouvrir un ticket\n`/fermer` — Fermer votre ticket\n`/ajouter <@user>` — Ajouter un membre\n`/retirer <@user>` — Retirer un membre", False),
-            ("⚙️ Administration *(admin)*", "`/panel-tickets` — Envoyer le panel\n`/config-tickets` — Voir la configuration\n`/set-log-tickets <#salon>` — Salon de logs\n`/ajouter-role-ticket <@role>` — Ajouter rôle ping\n`/retirer-role-ticket <@role>` — Retirer rôle ping\n`/ajouter-categorie-ticket` — Ajouter une catégorie\n`/retirer-categorie-ticket` — Supprimer une catégorie\n`/reset-config-tickets` — Réinitialiser la config", False),
+        make_page("🎫 Tickets — 1/5", "Système de tickets.", COLOR_PRIMARY, [
+            ("📩 Membres", "/ticket — Ouvrir\n/fermer — Fermer\n/ajouter @user\n/retirer @user", False),
+            ("⚙️ Admin", "/panel-tickets\n/config-tickets\n/set-log-tickets\n/ajouter-role-ticket\n/retirer-role-ticket\n/ajouter-categorie-ticket\n/retirer-categorie-ticket\n/reset-config-tickets", False),
         ]),
-        firm1_embed("Firm1 Bot — 🔨 Modération (2/5)", "Modération manuelle.\nℹ️ `/help <commande>` pour plus de détails.", color=COLOR_ERROR, fields=[
-            ("👮 Sanctions *(modo)*", "`/ban <@user> [raison]` — Bannir\n`/kick <@user> [raison]` — Expulser\n`/mute <@user> <durée> [raison]` — Mute\n`/unmute <@user>` — Retirer le mute\n`/warn <@user> <raison>` — Avertir\n`/warns <@user>` — Voir les avertissements\n`/clear <1-100>` — Supprimer des messages\n`/set-log-mod <#salon>` — Salon de logs mod *(admin)*", False),
+        make_page("🔨 Modération — 2/5", "Modération manuelle.", COLOR_ERROR, [
+            ("👮 Commandes", "/ban @user\n/kick @user\n/mute @user durée\n/unmute @user\n/warn @user raison\n/warns @user\n/clear 1-100\n/set-log-mod (admin)", False),
         ]),
-        firm1_embed("Firm1 Bot — 🤖 Auto-Modération (3/5)", "Modération automatique configurable.\nℹ️ `/help <commande>` pour plus de détails.", color=COLOR_WARNING, fields=[
-            ("⚙️ Configuration *(admin)*", "`/config-auto-mod` — Voir toute la config\n`/config-antispam` — Personnaliser l'antispam\n`/ajouter-badword <mot(s)>` — Ajouter un/des badword(s)\n`/retirer-badword <mot>` — Retirer un badword\n`/liste-badwords` — Voir tous les badwords\n`/salon-no-lien [#salon]` — Toggle interdiction liens\n`/salon-no-image [#salon]` — Toggle interdiction images", False),
-            ("🚨 Automatique", "• **Mots interdits** → suppression + MP\n• **Liens interdits** → suppression par salon\n• **Images interdites** → suppression par salon\n• **Antispam** → configurable → mute auto", False),
+        make_page("🤖 Auto-Modération — 3/5", "Modération automatique.", COLOR_WARNING, [
+            ("⚙️ Config", "/config-auto-mod\n/config-antispam\n/ajouter-badword\n/retirer-badword\n/liste-badwords\n/salon-no-lien\n/salon-no-image", False),
+            ("🚨 Auto", "Mots interdits → suppression\nLiens → suppression\nImages → suppression\nAntispam → mute auto", False),
         ]),
-        firm1_embed("Firm1 Bot — 🛡️ Whitelist & Blacklist (4/5)", "Gestion des accès membres.\nℹ️ `/help <commande>` pour plus de détails.", color=COLOR_INFO, fields=[
-            ("✅ Whitelist *(admin)* — bypass auto-mod", "`/whitelist-ajouter <@user>` — Ajouter\n`/whitelist-retirer <@user>` — Retirer\n`/whitelist-liste` — Voir la liste", False),
-            ("⛔ Blacklist *(admin)* — expulsion auto", "`/blacklist-ajouter <@user> [raison]` — Blacklister\n`/blacklist-retirer <@user>` — Retirer\n`/blacklist-liste` — Voir la liste", False),
+        make_page("🛡️ Whitelist & Blacklist — 4/5", "Gestion des accès.", COLOR_INFO, [
+            ("✅ Whitelist", "/whitelist-ajouter @user\n/whitelist-retirer @user\n/whitelist-liste", False),
+            ("⛔ Blacklist", "/blacklist-ajouter @user\n/blacklist-retirer @user\n/blacklist-liste", False),
         ]),
-        firm1_embed("Firm1 Bot — 🎮 Mini-Jeux & Utilitaires (5/5)", "Jeux et outils divers.\nℹ️ `/help <commande>` pour plus de détails.", color=COLOR_SUCCESS, fields=[
-            ("🎮 Mini-Jeux", "`/pile-ou-face` — Lancer une pièce\n`/dé [faces]` — Lancer un dé\n`/rps <choix>` — Pierre-Papier-Ciseaux\n`/nombre [max]` — Deviner un nombre\n`/8ball <question>` — Boule magique\n`/trivia` — Question de culture générale", False),
-            ("🛠️ Utilitaires", "`/ping` — Latence du bot\n`/info-serveur` — Infos sur le serveur\n`/info-user [@user]` — Infos sur un membre\n`/avatar [@user]` — Avatar d'un membre\n`/say <message> [#salon]` — Parler à la place du bot *(admin)*\n`/renommer-bot <nom>` — Changer le pseudo *(admin)*\n`/help [commande]` — Cette aide", False),
+        make_page("🎮 Mini-Jeux & Utilitaires — 5/5", "Jeux et outils.", COLOR_SUCCESS, [
+            ("🎮 Mini-Jeux", "/pile-ou-face\n/dé\n/rps\n/nombre\n/8ball\n/trivia", False),
+            ("🛠️ Utilitaires", "/ping\n/info-serveur\n/info-user\n/avatar\n/say (admin)\n/renommer-bot (admin)\n/help", False),
         ]),
     ]
 
@@ -322,15 +329,17 @@ async def help_cmd(interaction: discord.Interaction, commande: str | None = None
             self.next_btn.disabled = self.page == len(pages) - 1
             self.page_btn.label    = f"{self.page + 1} / {len(pages)}"
 
-        async def _go_to(self, i: discord.Interaction, new_page: int):
-            self.page = new_page
-            self._refresh()
-            await i.response.defer()
-            await i.edit_original_response(embed=pages[self.page], view=self)
+        async def on_error(self, interaction: discord.Interaction, error: Exception, item):
+            try:
+                await interaction.response.send_message("Erreur de navigation.", ephemeral=True)
+            except Exception:
+                pass
 
         @discord.ui.button(label="◀", style=discord.ButtonStyle.secondary)
         async def prev_btn(self, i: discord.Interaction, b: discord.ui.Button):
-            await self._go_to(i, self.page - 1)
+            self.page -= 1
+            self._refresh()
+            await i.response.edit_message(embed=pages[self.page], view=self)
 
         @discord.ui.button(label="1 / 5", style=discord.ButtonStyle.primary, disabled=True)
         async def page_btn(self, i: discord.Interaction, b: discord.ui.Button):
@@ -338,9 +347,12 @@ async def help_cmd(interaction: discord.Interaction, commande: str | None = None
 
         @discord.ui.button(label="▶", style=discord.ButtonStyle.secondary)
         async def next_btn(self, i: discord.Interaction, b: discord.ui.Button):
-            await self._go_to(i, self.page + 1)
+            self.page += 1
+            self._refresh()
+            await i.response.edit_message(embed=pages[self.page], view=self)
 
     await interaction.response.send_message(embed=pages[0], view=HelpView(), ephemeral=True)
+
 
 # ═══════════════════════════════════════════════════════════
 #  UTILITAIRES
