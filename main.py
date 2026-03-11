@@ -14,6 +14,10 @@ import json
 import random
 import asyncio
 import datetime
+import logging
+import traceback
+
+logging.basicConfig(level=logging.INFO)
 
 import discord
 from discord import app_commands
@@ -1177,4 +1181,5 @@ while True:
         bot.run(token, reconnect=True)
     except Exception as e:
         print(f"❌ Crash : {e}")
+        traceback.print_exc()
         import time; time.sleep(10)
