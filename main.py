@@ -2017,11 +2017,4 @@ async def on_member_join(member: discord.Member):
 if KEEP_ALIVE_AVAILABLE:
     keep_alive()
 
-while True:
-    try:
-        bot.run(token, reconnect=True)
-    except Exception as e:
-        print(f"❌ Crash : {e}")
-        traceback.print_exc()
-        import time
-        time.sleep(10)
+bot.run(token, reconnect=True)
