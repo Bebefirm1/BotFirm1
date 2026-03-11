@@ -1984,8 +1984,15 @@ async def on_message(message: discord.Message):
                     ("📍 Salon",  message.channel.mention,                     True),
                     ("🔇 Durée",  f"{spam_mute} min",                          True),
                 ])
-            except Exception:
-                pass
+            except discord.Forbidden:
+                await message.channel.send(embed=firm1_embed(
+                    "⚠️ Antispam — Permission manquante",
+                    f"Impossible de mute {message.author.mention} : le bot n'a pas la permission ou le rôle du membre est trop élevé.",
+                    color=COLOR_WARNING,
+                ))
+            except Exception as e:
+                print(f"❌ Erreur antispam : {e}")
+                traceback.print_exc()
 
     await bot.process_commands(message)
 
