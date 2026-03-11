@@ -322,14 +322,15 @@ async def help_cmd(interaction: discord.Interaction, commande: str | None = None
             self.next_btn.disabled = self.page == len(pages) - 1
             self.page_btn.label    = f"{self.page + 1} / {len(pages)}"
 
+        async def _go_to(self, i: discord.Interaction, new_page: int):
+            self.page = new_page
+            self._refresh()
+            await i.response.defer()
+            await i.edit_original_response(embed=pages[self.page], view=self)
+
         @discord.ui.button(label="◀", style=discord.ButtonStyle.secondary)
         async def prev_btn(self, i: discord.Interaction, b: discord.ui.Button):
-            self.page -= 1
-            self._refresh()
-            try:
-                await i.response.edit_message(embed=pages[self.page], view=self)
-            except Exception:
-                await i.followup.edit_message(message_id=i.message.id, embed=pages[self.page], view=self)
+            await self._go_to(i, self.page - 1)
 
         @discord.ui.button(label="1 / 5", style=discord.ButtonStyle.primary, disabled=True)
         async def page_btn(self, i: discord.Interaction, b: discord.ui.Button):
@@ -337,12 +338,7 @@ async def help_cmd(interaction: discord.Interaction, commande: str | None = None
 
         @discord.ui.button(label="▶", style=discord.ButtonStyle.secondary)
         async def next_btn(self, i: discord.Interaction, b: discord.ui.Button):
-            self.page += 1
-            self._refresh()
-            try:
-                await i.response.edit_message(embed=pages[self.page], view=self)
-            except Exception:
-                await i.followup.edit_message(message_id=i.message.id, embed=pages[self.page], view=self)
+            await self._go_to(i, self.page + 1)
 
     await interaction.response.send_message(embed=pages[0], view=HelpView(), ephemeral=True)
 
