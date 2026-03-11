@@ -1,4 +1,4 @@
-"""  
+"""
 ╔══════════════════════════════════════════════════════════╗
 ║           🎮 FIRM1 — Bot de Gestion Discord             ║
 ║      Tickets • Modération • Auto-mod • Mini-Jeux        ║
@@ -324,17 +324,25 @@ async def help_cmd(interaction: discord.Interaction, commande: str | None = None
 
         @discord.ui.button(label="◀", style=discord.ButtonStyle.secondary)
         async def prev_btn(self, i: discord.Interaction, b: discord.ui.Button):
-            self.page -= 1; self._refresh()
-            await i.response.edit_message(embed=pages[self.page], view=self)
+            self.page -= 1
+            self._refresh()
+            try:
+                await i.response.edit_message(embed=pages[self.page], view=self)
+            except Exception:
+                await i.followup.edit_message(message_id=i.message.id, embed=pages[self.page], view=self)
 
         @discord.ui.button(label="1 / 5", style=discord.ButtonStyle.primary, disabled=True)
         async def page_btn(self, i: discord.Interaction, b: discord.ui.Button):
-            pass
+            await i.response.defer()
 
         @discord.ui.button(label="▶", style=discord.ButtonStyle.secondary)
         async def next_btn(self, i: discord.Interaction, b: discord.ui.Button):
-            self.page += 1; self._refresh()
-            await i.response.edit_message(embed=pages[self.page], view=self)
+            self.page += 1
+            self._refresh()
+            try:
+                await i.response.edit_message(embed=pages[self.page], view=self)
+            except Exception:
+                await i.followup.edit_message(message_id=i.message.id, embed=pages[self.page], view=self)
 
     await interaction.response.send_message(embed=pages[0], view=HelpView(), ephemeral=True)
 
