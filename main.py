@@ -2250,7 +2250,7 @@ POKEMON_LIST = [
     {"id": 403 , "fr": "Lixy"},
     {"id": 404 , "fr": "Luxio"},
     {"id": 405 , "fr": "Luxray"},
-    {"id": 406 , "fr": "Rozbouton"},
+    {"id": 406 , "fr": "Roselia"},
     {"id": 407 , "fr": "Roserade"},
     {"id": 408 , "fr": "Kranidos"},
     {"id": 409 , "fr": "Rampardos"},
@@ -2276,7 +2276,7 @@ POKEMON_LIST = [
     {"id": 429 , "fr": "Mistigrix"},
     {"id": 430 , "fr": "Corboss"},
     {"id": 431 , "fr": "Chaglam"},
-    {"id": 432 , "fr": "Chaglam"},
+    {"id": 432 , "fr": "Malosse"},
     {"id": 433 , "fr": "Tintignol"},
     {"id": 434 , "fr": "Moufouine"},
     {"id": 435 , "fr": "Moufflair"},
@@ -2289,7 +2289,7 @@ POKEMON_LIST = [
     {"id": 442 , "fr": "Spiritomb"},
     {"id": 443 , "fr": "Griknot"},
     {"id": 444 , "fr": "Gabite"},
-    {"id": 445 , "fr": "Togekiss"},
+    {"id": 445 , "fr": "Garchompe"},
     {"id": 446 , "fr": "Goinfrex"},
     {"id": 447 , "fr": "Riolu"},
     {"id": 448 , "fr": "Lucario"},
@@ -2300,8 +2300,8 @@ POKEMON_LIST = [
     {"id": 453 , "fr": "Croâporal"},
     {"id": 454 , "fr": "Croâkitect"},
     {"id": 455 , "fr": "Culagriffe"},
-    {"id": 456 , "fr": "Luminéon"},
-    {"id": 457 , "fr": "Finnéon"},
+    {"id": 456 , "fr": "Finnéon"},
+    {"id": 457 , "fr": "Luminéon"},
     {"id": 458 , "fr": "Bébécaille"},
     {"id": 459 , "fr": "Blizzi"},
     {"id": 460 , "fr": "Momartik"},
@@ -2351,16 +2351,16 @@ POKEMON_LIST = [
     {"id": 504 , "fr": "Vivaldaim"},
     {"id": 505 , "fr": "Basavoir"},
     {"id": 506 , "fr": "Ponchiot"},
-    {"id": 507 , "fr": "Ponchiot"},
+    {"id": 507 , "fr": "Léoption"},
     {"id": 508 , "fr": "Mastouffe"},
     {"id": 509 , "fr": "Fourbelin"},
     {"id": 510 , "fr": "Mancifu"},
-    {"id": 511 , "fr": "Feuillajou"},
-    {"id": 512 , "fr": "Pansage"},
-    {"id": 513 , "fr": "Flamajou"},
-    {"id": 514 , "fr": "Pansear"},
-    {"id": 515 , "fr": "Lézargus"},
-    {"id": 516 , "fr": "Panpour"},
+    {"id": 511 , "fr": "Pansage"},
+    {"id": 512 , "fr": "Feuillajou"},
+    {"id": 513 , "fr": "Pansear"},
+    {"id": 514 , "fr": "Flamajou"},
+    {"id": 515 , "fr": "Panpour"},
+    {"id": 516 , "fr": "Lézargus"},
     {"id": 517 , "fr": "Munna"},
     {"id": 518 , "fr": "Musharna"},
     {"id": 519 , "fr": "Poichigeon"},
@@ -2407,8 +2407,8 @@ POKEMON_LIST = [
     {"id": 560 , "fr": "Scrafty"},
     {"id": 561 , "fr": "Archéoveil"},
     {"id": 562 , "fr": "Tutafeh"},
-    {"id": 563 , "fr": "Tutafeh"},
-    {"id": 564 , "fr": "Couverture"},
+    {"id": 563 , "fr": "Cofagrigus"},
+    {"id": 564 , "fr": "Tirtouga"},
     {"id": 565 , "fr": "Carracosta"},
     {"id": 566 , "fr": "Archen"},
     {"id": 567 , "fr": "Aéroptéryx"},
@@ -2418,7 +2418,7 @@ POKEMON_LIST = [
     {"id": 571 , "fr": "Zoroark"},
     {"id": 572 , "fr": "Nounourson"},
     {"id": 573 , "fr": "Normalon"},
-    {"id": 574 , "fr": "Natu"},
+    {"id": 574 , "fr": "Solochi"},
     {"id": 575 , "fr": "Galineur"},
     {"id": 576 , "fr": "Galicristal"},
     {"id": 577 , "fr": "Duodécile"},
@@ -2461,7 +2461,7 @@ POKEMON_LIST = [
     {"id": 614 , "fr": "Ursaking"},
     {"id": 615 , "fr": "Cryokrak"},
     {"id": 616 , "fr": "Cochignon"},
-    {"id": 617 , "fr": "Métamorph"},
+    {"id": 617 , "fr": "Escargaume"},
     {"id": 618 , "fr": "Limonde"},
     {"id": 619 , "fr": "Kungfouine"},
     {"id": 620 , "fr": "Mustéfélin"},
@@ -2501,7 +2501,7 @@ POKEMON_LIST = [
     {"id": 654 , "fr": "Roussil"},
     {"id": 655 , "fr": "Goupelin"},
     {"id": 656 , "fr": "Frondaim"},
-    {"id": 657 , "fr": "Croâporal"},
+    {"id": 657 , "fr": "Croâkitect"},
     {"id": 658 , "fr": "Greninja"},
     {"id": 659 , "fr": "Sapereau"},
     {"id": 660 , "fr": "Graby"},
@@ -2521,13 +2521,13 @@ POKEMON_LIST = [
     {"id": 674 , "fr": "Farfadet"},
     {"id": 675 , "fr": "Pancham"},
     {"id": 676 , "fr": "Pandarbare"},
-    {"id": 677 , "fr": "Espeon"},
+    {"id": 677 , "fr": "Espurr"},
     {"id": 678 , "fr": "Mérovin"},
     {"id": 679 , "fr": "Doublade"},
     {"id": 680 , "fr": "Doublade"},
     {"id": 681 , "fr": "Egiide"},
     {"id": 682 , "fr": "Sucroquin"},
-    {"id": 683 , "fr": ", Mukade"},
+    {"id": 683 , "fr": "Mukade"},
     {"id": 684 , "fr": "Parfaite"},
     {"id": 685 , "fr": "Aromatisse"},
     {"id": 686 , "fr": "Sepiatop"},
@@ -2582,8 +2582,8 @@ POKEMON_LIST = [
     {"id": 735 , "fr": "Brutal"},
     {"id": 736 , "fr": "Charjabug"},
     {"id": 737 , "fr": "Vikavolt"},
-    {"id": 738 , "fr": "Crustabri"},
-    {"id": 739 , "fr": "Sapereau"},
+    {"id": 738 , "fr": "Crabagarre"},
+    {"id": 739 , "fr": "Crabominable"},
     {"id": 740 , "fr": "Oricorio"},
     {"id": 741 , "fr": "Oricorio"},
     {"id": 742 , "fr": "Mimantis"},
@@ -2596,7 +2596,7 @@ POKEMON_LIST = [
     {"id": 749 , "fr": "Camptrousse"},
     {"id": 750 , "fr": "Araknyd"},
     {"id": 751 , "fr": "Araqua"},
-    {"id": 752 , "fr": "Mimantis"},
+    {"id": 752 , "fr": "Fomantis"},
     {"id": 753 , "fr": "Floramantis"},
     {"id": 754 , "fr": "Lampignon"},
     {"id": 755 , "fr": "Vespibule"},
@@ -2608,52 +2608,51 @@ POKEMON_LIST = [
     {"id": 761 , "fr": "Stévia"},
     {"id": 762 , "fr": "Tsareena"},
     {"id": 763 , "fr": "Guérilande"},
-    {"id": 764 , "fr": "Pangoro"},
+    {"id": 764 , "fr": "Oranguru"},
     {"id": 765 , "fr": "Passimian"},
     {"id": 766 , "fr": "Nigosier"},
     {"id": 767 , "fr": "Golisopod"},
-    {"id": 768 , "fr": "Sablaireau"},
-    {"id": 769 , "fr": "Sandyghast"},
-    {"id": 770 , "fr": "Palossand"},
-    {"id": 771 , "fr": "Pyukumuku"},
-    {"id": 772 , "fr": "Type:Zéro"},
-    {"id": 773 , "fr": "Silvallié"},
-    {"id": 774 , "fr": "Météno"},
-    {"id": 775 , "fr": "Moumouton"},
-    {"id": 776 , "fr": "Turtonator"},
-    {"id": 777 , "fr": "Togedemaru"},
-    {"id": 778 , "fr": "Mimiqui"},
-    {"id": 779 , "fr": "Bruxish"},
-    {"id": 780 , "fr": "Drampa"},
-    {"id": 781 , "fr": "Okhosi"},
-    {"id": 782 , "fr": "Jangmo-o"},
-    {"id": 783 , "fr": "Hakamo-o"},
-    {"id": 784 , "fr": "Kommo-o"},
-    {"id": 785 , "fr": "Tapu Koko"},
-    {"id": 786 , "fr": "Tapu Lele"},
-    {"id": 787 , "fr": "Tapu Bulu"},
-    {"id": 788 , "fr": "Tapu Fini"},
-    {"id": 789 , "fr": "Cosmog"},
-    {"id": 790 , "fr": "Cosmoem"},
-    {"id": 791 , "fr": "Solgaleo"},
-    {"id": 792 , "fr": "Lunala"},
-    {"id": 793 , "fr": "Nihilego"},
-    {"id": 794 , "fr": "Buzzwole"},
-    {"id": 795 , "fr": "Pheromosa"},
-    {"id": 796 , "fr": "Xurkitree"},
-    {"id": 797 , "fr": "Célestacier"},
-    {"id": 798 , "fr": "Kartana"},
-    {"id": 799 , "fr": "Guzzlord"},
-    {"id": 800 , "fr": "Necrozma"},
-    {"id": 801 , "fr": "Magearna"},
-    {"id": 802 , "fr": "Marshadow"},
-    {"id": 803 , "fr": "Poipole"},
-    {"id": 804 , "fr": "Naganadel"},
-    {"id": 805 , "fr": "Stakataka"},
-    {"id": 806 , "fr": "Blacephalon"},
-    {"id": 807 , "fr": "Zeraora"},
-    {"id": 808 , "fr": "Meltan"},
-    {"id": 809 , "fr": "Melmetal"},
+    {"id": 768 , "fr": "Sandyghast"},
+    {"id": 769 , "fr": "Palossand"},
+    {"id": 770 , "fr": "Pyukumuku"},
+    {"id": 771 , "fr": "Type:Zéro"},
+    {"id": 772 , "fr": "Silvallié"},
+    {"id": 773 , "fr": "Météno"},
+    {"id": 774 , "fr": "Moumouton"},
+    {"id": 775 , "fr": "Turtonator"},
+    {"id": 776 , "fr": "Togedemaru"},
+    {"id": 777 , "fr": "Mimiqui"},
+    {"id": 778 , "fr": "Bruxish"},
+    {"id": 779 , "fr": "Drampa"},
+    {"id": 780 , "fr": "Okhosi"},
+    {"id": 781 , "fr": "Jangmo-o"},
+    {"id": 782 , "fr": "Hakamo-o"},
+    {"id": 783 , "fr": "Kommo-o"},
+    {"id": 784 , "fr": "Tapu Koko"},
+    {"id": 785 , "fr": "Tapu Lele"},
+    {"id": 786 , "fr": "Tapu Bulu"},
+    {"id": 787 , "fr": "Tapu Fini"},
+    {"id": 788 , "fr": "Cosmog"},
+    {"id": 789 , "fr": "Cosmoem"},
+    {"id": 790 , "fr": "Solgaleo"},
+    {"id": 791 , "fr": "Lunala"},
+    {"id": 792 , "fr": "Nihilego"},
+    {"id": 793 , "fr": "Buzzwole"},
+    {"id": 794 , "fr": "Pheromosa"},
+    {"id": 795 , "fr": "Xurkitree"},
+    {"id": 796 , "fr": "Célestacier"},
+    {"id": 797 , "fr": "Kartana"},
+    {"id": 798 , "fr": "Guzzlord"},
+    {"id": 799 , "fr": "Necrozma"},
+    {"id": 800 , "fr": "Magearna"},
+    {"id": 801 , "fr": "Marshadow"},
+    {"id": 802 , "fr": "Poipole"},
+    {"id": 803 , "fr": "Naganadel"},
+    {"id": 804 , "fr": "Stakataka"},
+    {"id": 805 , "fr": "Blacephalon"},
+    {"id": 806 , "fr": "Zeraora"},
+    {"id": 807 , "fr": "Meltan"},
+    {"id": 808 , "fr": "Melmetal"},
     {"id": 810 , "fr": "Ouistempo"},
     {"id": 811 , "fr": "Badabing"},
     {"id": 812 , "fr": "Gorythmic"},
@@ -2663,7 +2662,7 @@ POKEMON_LIST = [
     {"id": 816 , "fr": "Larméléon"},
     {"id": 817 , "fr": "Pharyngite"},
     {"id": 818 , "fr": "Moyade"},
-    {"id": 819 , "fr": "Larméléon"},
+    {"id": 819 , "fr": "Grogleur"},
     {"id": 820 , "fr": "Argouste"},
     {"id": 821 , "fr": "Corvisquire"},
     {"id": 822 , "fr": "Corviknight"},
@@ -2697,20 +2696,20 @@ POKEMON_LIST = [
     {"id": 850 , "fr": "Grapploct"},
     {"id": 851 , "fr": "Théffroi"},
     {"id": 852 , "fr": "Polthégeist"},
-    {"id": 853 , "fr": "Lilliputt"},
-    {"id": 854 , "fr": "Milcéry"},
-    {"id": 855 , "fr": "Mimifroi"},
+    {"id": 853 , "fr": "Milcéry"},
+    {"id": 854 , "fr": "Alcremie"},
+    {"id": 855 , "fr": "Falinks"},
     {"id": 856 , "fr": "Pincurchin"},
     {"id": 857 , "fr": "Frison"},
     {"id": 858 , "fr": "Frosmoth"},
     {"id": 859 , "fr": "Caillépique"},
-    {"id": 860 , "fr": "Cube Glace"},
+    {"id": 860 , "fr": "Eihtpik"},
     {"id": 861 , "fr": "Charmina"},
-    {"id": 862 , "fr": "Morepeko"},
+    {"id": 862 , "fr": "Morpeko"},
     {"id": 863 , "fr": "Cufant"},
     {"id": 864 , "fr": "Elécindus"},
     {"id": 865 , "fr": "Dracozolt"},
-    {"id": 866 , "fr": "Voltoutou"},
+    {"id": 866 , "fr": "Arctozolt"},
     {"id": 867 , "fr": "Dracovish"},
     {"id": 868 , "fr": "Arctovish"},
     {"id": 869 , "fr": "Duraludon"},
@@ -2758,10 +2757,6 @@ POKEMON_LIST = [
     {"id": 934 , "fr": "Charcadet"},
     {"id": 935 , "fr": "Armarouge"},
     {"id": 936 , "fr": "Céruledge"},
-    {"id": 937 , "fr": "Tadbulbe"},
-    {"id": 938 , "fr": "Crabomino"},
-    {"id": 939 , "fr": "Wugtrio"},
-    {"id": 940 , "fr": "Bombizzlo"},
     {"id": 941 , "fr": "Finizen"},
     {"id": 942 , "fr": "Palafin"},
     {"id": 943 , "fr": "Vrombax"},
@@ -2805,7 +2800,12 @@ active_pokemon_games: dict[int, dict] = {}
 # Scores par serveur : guild_id -> user_id -> int
 pokemon_scores: dict[int, dict[int, int]] = {}
 
-PHILOSOPHE_ROLE_NAME = "Philosophe en Pokémon"
+# Top 3 rôles Pokémon : (nom, couleur, emoji)
+POKEMON_TOP_ROLES = [
+    ("Professeur Pokémon",            discord.Color.gold(),                   "🥇"),
+    ("Expert du pokédex",             discord.Color.light_grey(),             "🥈"),
+    ("Grand connaisseur des Pokémon", discord.Color.from_rgb(205, 127, 50),  "🥉"),
+]
 
 
 def normalize_pokemon(text: str) -> str:
@@ -2817,42 +2817,53 @@ def normalize_pokemon(text: str) -> str:
     return text.strip()
 
 
-async def update_philosophe_role(guild: discord.Guild):
-    """Attribue le rôle Philosophe en Pokémon au membre avec le + de réponses justes.
-    Crée le rôle s'il n'existe pas. Retire le rôle à l'ancien détenteur."""
+async def update_pokemon_top_roles(guild: discord.Guild):
+    """Attribue les rôles Top 1/2/3 Pokémon selon le classement.
+    Crée les rôles manquants, retire les anciens et attribue les nouveaux."""
     scores = pokemon_scores.get(guild.id, {})
     if not scores:
         return
 
-    # Trouver le rôle ou le créer
-    role = discord.utils.get(guild.roles, name=PHILOSOPHE_ROLE_NAME)
-    if not role:
-        try:
-            role = await guild.create_role(
-                name=PHILOSOPHE_ROLE_NAME,
-                color=discord.Color.gold(),
-                hoist=True,
-                reason="Rôle automatique Pokémon — Firm1 Bot",
-            )
-        except discord.Forbidden:
-            return
+    sorted_scores = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+    top3_uids = [uid for uid, _ in sorted_scores[:3]]
 
-    # Retirer le rôle à tous les anciens détenteurs
-    for member in guild.members:
-        if role in member.roles:
+    # S'assurer que les 3 rôles existent
+    roles = []
+    for nom, couleur, _ in POKEMON_TOP_ROLES:
+        role = discord.utils.get(guild.roles, name=nom)
+        if not role:
             try:
-                await member.remove_roles(role, reason="Nouveau champion Pokémon")
+                role = await guild.create_role(
+                    name=nom,
+                    color=couleur,
+                    hoist=True,
+                    reason="Rôle automatique Top Pokémon — Firm1 Bot",
+                )
+            except discord.Forbidden:
+                role = None
+        roles.append(role)
+
+    # Retirer tous les rôles top Pokémon à tout le monde
+    for role in roles:
+        if not role:
+            continue
+        for member in guild.members:
+            if role in member.roles:
+                try:
+                    await member.remove_roles(role, reason="Mise à jour classement Pokémon")
+                except Exception:
+                    pass
+
+    # Attribuer les nouveaux rôles
+    for i, uid in enumerate(top3_uids):
+        if i >= len(roles) or not roles[i]:
+            continue
+        member = guild.get_member(uid)
+        if member:
+            try:
+                await member.add_roles(roles[i], reason=f"Top {i+1} Pokémon — Firm1 Bot")
             except Exception:
                 pass
-
-    # Trouver le nouveau champion
-    best_uid = max(scores, key=lambda uid: scores[uid])
-    best_member = guild.get_member(best_uid)
-    if best_member:
-        try:
-            await best_member.add_roles(role, reason="Champion Pokémon — Firm1 Bot")
-        except Exception:
-            pass
 
 
 @tree.command(name="pokemon", description="Quel est ce Pokémon ? Devinez son nom en français !")
@@ -2909,20 +2920,26 @@ async def pokemon_cmd(interaction: discord.Interaction):
                 pokemon_scores[gid][uid] = pokemon_scores[gid].get(uid, 0) + 1
                 score = pokemon_scores[gid][uid]
 
-                # Mettre à jour le rôle Philosophe
-                await update_philosophe_role(interaction.guild)
+                # Mettre à jour le top 3 rôles
+                await update_pokemon_top_roles(interaction.guild)
 
-                # Vérifier si ce joueur est le nouveau champion
-                scores  = pokemon_scores[gid]
-                best_uid = max(scores, key=lambda u: scores[u])
-                is_champ = (uid == best_uid)
+                # Déterminer le rang du joueur
+                sorted_s = sorted(pokemon_scores[gid].items(), key=lambda x: x[1], reverse=True)
+                rang = next((i+1 for i, (u, _) in enumerate(sorted_s) if u == uid), None)
+                rang_txt = ""
+                if rang == 1:
+                    rang_txt = f"\n\n🥇 **{msg.author.display_name}** est désormais **Professeur Pokémon** !"
+                elif rang == 2:
+                    rang_txt = f"\n\n🥈 **{msg.author.display_name}** est désormais **Expert du pokédex** !"
+                elif rang == 3:
+                    rang_txt = f"\n\n🥉 **{msg.author.display_name}** est désormais **Grand connaisseur des Pokémon** !"
 
                 win_embed = discord.Embed(
                     title="🎉 Bonne réponse !",
                     description=(
                         f"{msg.author.mention} a trouvé ! C'était **{pokemon['fr']}** !\n\n"
                         f"🏅 Score : **{score}** bonne(s) réponse(s)"
-                        + (f"\n\n👑 {msg.author.display_name} est le nouveau **Philosophe en Pokémon** !" if is_champ else "")
+                        + rang_txt
                     ),
                     color=COLOR_SUCCESS,
                     timestamp=datetime.datetime.now(datetime.timezone.utc),
@@ -2965,9 +2982,15 @@ async def pokemon_score_cmd(interaction: discord.Interaction):
     for i, (uid, score) in enumerate(sorted_scores[:10]):
         medal  = medals[i] if i < 3 else f"**#{i+1}**"
         member = interaction.guild.get_member(uid)
-        name   = member.display_name if member else f"Utilisateur inconnu"
-        crown  = " 👑" if i == 0 else ""
-        lines.append(f"{medal} **{name}**{crown} — {score} bonne(s) réponse(s)")
+        name   = member.display_name if member else "Utilisateur inconnu"
+        role_txt = ""
+        if i == 0:
+            role_txt = " — *Professeur Pokémon*"
+        elif i == 1:
+            role_txt = " — *Expert du pokédex*"
+        elif i == 2:
+            role_txt = " — *Grand connaisseur des Pokémon*"
+        lines.append(f"{medal} **{name}**{role_txt} : {score} bonne(s) réponse(s)")
 
     embed = discord.Embed(
         title="🏆 Classement Pokémon — Meilleurs Dresseurs",
@@ -2976,8 +2999,12 @@ async def pokemon_score_cmd(interaction: discord.Interaction):
         timestamp=datetime.datetime.now(datetime.timezone.utc),
     )
     embed.add_field(
-        name="🎭 Titre suprême",
-        value=f"Le leader porte le rôle **{PHILOSOPHE_ROLE_NAME}**",
+        name="🎭 Titres du Top 3",
+        value=(
+            "🥇 **1er** → Professeur Pokémon\n"
+            "🥈 **2ème** → Expert du pokédex\n"
+            "🥉 **3ème** → Grand connaisseur des Pokémon"
+        ),
         inline=False,
     )
     embed.set_footer(text="Firm1 Bot • Support Gaming")
