@@ -1844,7 +1844,10 @@ async def trivia(interaction: discord.Interaction):
 
 import unicodedata as _ud
 
-POKEMON_LIST = [
+    {POKEMON_LIST = [
+    # ═══════════════════════════════════════
+    # GEN 1 — Kanto (001–151)
+    # ═══════════════════════════════════════
     {"id": 1   , "fr": "Bulbizarre"},
     {"id": 2   , "fr": "Herbizarre"},
     {"id": 3   , "fr": "Florizarre"},
@@ -1996,6 +1999,9 @@ POKEMON_LIST = [
     {"id": 149 , "fr": "Dracolosse"},
     {"id": 150 , "fr": "Mewtwo"},
     {"id": 151 , "fr": "Mew"},
+    # ═══════════════════════════════════════
+    # GEN 2 — Johto (152–251)
+    # ═══════════════════════════════════════
     {"id": 152 , "fr": "Germignon"},
     {"id": 153 , "fr": "Macronium"},
     {"id": 154 , "fr": "Méganium"},
@@ -2096,6 +2102,9 @@ POKEMON_LIST = [
     {"id": 249 , "fr": "Lugia"},
     {"id": 250 , "fr": "Ho-Oh"},
     {"id": 251 , "fr": "Celebi"},
+    # ═══════════════════════════════════════
+    # GEN 3 — Hoenn (252–386)
+    # ═══════════════════════════════════════
     {"id": 252 , "fr": "Arcko"},
     {"id": 253 , "fr": "Massko"},
     {"id": 254 , "fr": "Jungko"},
@@ -2231,6 +2240,9 @@ POKEMON_LIST = [
     {"id": 384 , "fr": "Rayquaza"},
     {"id": 385 , "fr": "Jirachi"},
     {"id": 386 , "fr": "Deoxys"},
+    # ═══════════════════════════════════════
+    # GEN 4 — Sinnoh (387–493)
+    # ═══════════════════════════════════════
     {"id": 387 , "fr": "Tortipouss"},
     {"id": 388 , "fr": "Torterreur"},
     {"id": 389 , "fr": "Torterra"},
@@ -2239,7 +2251,7 @@ POKEMON_LIST = [
     {"id": 392 , "fr": "Simiabraz"},
     {"id": 393 , "fr": "Tiplouf"},
     {"id": 394 , "fr": "Prinplouf"},
-    {"id": 395 , "fr": "Empleo"},
+    {"id": 395 , "fr": "Pingoléon"},
     {"id": 396 , "fr": "Étourmi"},
     {"id": 397 , "fr": "Étourvol"},
     {"id": 398 , "fr": "Étouraptor"},
@@ -2338,6 +2350,9 @@ POKEMON_LIST = [
     {"id": 491 , "fr": "Darkrai"},
     {"id": 492 , "fr": "Shaymin"},
     {"id": 493 , "fr": "Arceus"},
+    # ═══════════════════════════════════════
+    # GEN 5 — Unys (494–649)
+    # ═══════════════════════════════════════
     {"id": 494 , "fr": "Victini"},
     {"id": 495 , "fr": "Vipélierre"},
     {"id": 496 , "fr": "Lianaja"},
@@ -2494,6 +2509,9 @@ POKEMON_LIST = [
     {"id": 647 , "fr": "Keldeo"},
     {"id": 648 , "fr": "Méloïc"},
     {"id": 649 , "fr": "Genesect"},
+    # ═══════════════════════════════════════
+    # GEN 6 — Kalos (650–721)
+    # ═══════════════════════════════════════
     {"id": 650 , "fr": "Marisson"},
     {"id": 651 , "fr": "Broquélard"},
     {"id": 652 , "fr": "Blindépique"},
@@ -2566,6 +2584,9 @@ POKEMON_LIST = [
     {"id": 719 , "fr": "Diancie"},
     {"id": 720 , "fr": "Hoopa"},
     {"id": 721 , "fr": "Volcanion"},
+    # ═══════════════════════════════════════
+    # GEN 7 — Alola (722–807)
+    # ═══════════════════════════════════════
     {"id": 722 , "fr": "Brindibou"},
     {"id": 723 , "fr": "Efflèche"},
     {"id": 724 , "fr": "Archéduc"},
@@ -2653,6 +2674,9 @@ POKEMON_LIST = [
     {"id": 806 , "fr": "Zeraora"},
     {"id": 807 , "fr": "Meltan"},
     {"id": 808 , "fr": "Melmetal"},
+    # ═══════════════════════════════════════
+    # GEN 8 — Galar (810–898)
+    # ═══════════════════════════════════════
     {"id": 810 , "fr": "Ouistempo"},
     {"id": 811 , "fr": "Badabing"},
     {"id": 812 , "fr": "Gorythmic"},
@@ -2727,6 +2751,9 @@ POKEMON_LIST = [
     {"id": 881 , "fr": "Blizzeval"},
     {"id": 882 , "fr": "Spectrier"},
     {"id": 883 , "fr": "Sylveroy"},
+    # ═══════════════════════════════════════
+    # GEN 9 — Paldea (906–1007)
+    # ═══════════════════════════════════════
     {"id": 906 , "fr": "Poussacha"},
     {"id": 907 , "fr": "Matourgeon"},
     {"id": 908 , "fr": "Miascarade"},
@@ -2820,6 +2847,7 @@ POKEMON_LIST = [
     {"id": 1006, "fr": "Terapagos"},
     {"id": 1007, "fr": "Pêchaminus"},
 ]
+
 
 # Parties actives : channel_id -> {"pokemon": {...}}
 active_pokemon_games: dict[int, dict] = {}
