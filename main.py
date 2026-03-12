@@ -1,7 +1,7 @@
 """
 ╔══════════════════════════════════════════════════════════╗
-║           🎮 FIRM1 — Bot de Gestion Discord             ║
-║      Tickets • Modération • Auto-mod • Mini-Jeux        ║
+║           🎮 FIRM1 — Bot de Gestion Discord                        ║
+║      Tickets • Modération • Auto-mod • Mini-Jeux                   ║
 ╚══════════════════════════════════════════════════════════╝
 
 Dépendances : pip install discord.py python-dotenv flask
@@ -1844,7 +1844,7 @@ async def trivia(interaction: discord.Interaction):
 
 import unicodedata as _ud
 
-    {POKEMON_LIST = [
+POKEMON_LIST = [
     # ═══════════════════════════════════════
     # GEN 1 — Kanto (001–151)
     # ═══════════════════════════════════════
