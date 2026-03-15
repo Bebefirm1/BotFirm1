@@ -1,7 +1,7 @@
-""" 
+"""
 ╔══════════════════════════════════════════════════════════╗
-║           🎮 FIRM1 — Bot de Gestion Discord                        ║
-║      Tickets • Modération • Auto-mod • Mini-Jeux                   ║
+║           🎮 FIRM1 — Bot de Gestion Discord             ║
+║      Tickets • Modération • Auto-mod • Mini-Jeux        ║
 ╚══════════════════════════════════════════════════════════╝
 
 Dépendances : pip install discord.py python-dotenv flask
@@ -11,11 +11,13 @@ Configuration : créez un fichier .env avec Token_bot=VOTRE_TOKEN
 import re
 import os
 import json
+import time
 import random
 import asyncio
 import datetime
 import logging
 import traceback
+import unicodedata as _ud
 
 import discord
 from discord import app_commands
@@ -33,18 +35,18 @@ except ImportError:
 load_dotenv()
 token = os.getenv("Token_bot")
 
-# ─────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────
 #  Couleurs
-# ─────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────
 COLOR_PRIMARY = 0x5865F2
 COLOR_SUCCESS = 0x57F287
 COLOR_WARNING = 0xFEE75C
 COLOR_ERROR   = 0xED4245
 COLOR_INFO    = 0x00B0FF
 
-# ─────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────
 #  Bot & Intents
-# ─────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────
 intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
@@ -65,9 +67,9 @@ SPAM_MUTE_DEFAULT   = 5
 
 TICKET_CATEGORY_NAME = "🎫 Tickets"
 
-# ─────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────
 #  Helper embed
-# ─────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────
 def firm1_embed(
     title: str,
     description: str = "",
@@ -90,9 +92,9 @@ def firm1_embed(
             embed.add_field(name=name, value=value, inline=inline)
     return embed
 
-# ─────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────
 #  Config persistante par serveur
-# ─────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────
 CONFIG_FILE = "ticket_config.json"
 
 def _load_config() -> dict:
@@ -117,9 +119,9 @@ def set_guild_config(guild_id: int, key: str, value):
     cfg[gid][key] = value
     _save_config(cfg)
 
-# ─────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────
 #  Helper log de modération
-# ─────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────
 async def send_mod_log(guild: discord.Guild, **kwargs):
     cfg     = get_guild_config(guild.id)
     log_id  = cfg.get("mod_log_channel_id")
@@ -141,9 +143,9 @@ async def send_mod_log(guild: discord.Guild, **kwargs):
     except Exception:
         pass
 
-# ─────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────
 #  Helpers modération
-# ─────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────
 def parse_duration(duration: str) -> int | None:
     match = re.fullmatch(r"(\d+)(s|m|h|j)", duration.lower())
     if not match:
@@ -164,9 +166,9 @@ def add_warn(guild_id: int, user_id: int, raison: str, moderator: str) -> int:
     set_guild_config(guild_id, "warns", warns)
     return len(warns[uid])
 
-# ─────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────
 #  Événements
-# ─────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────
 @bot.event
 async def on_ready():
     print(f"✅ Firm1 connecté : {bot.user} (ID: {bot.user.id})")
@@ -196,9 +198,9 @@ async def on_guild_join(guild: discord.Guild):
             ))
             break
 
-# ─────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────
 #  Gestion des erreurs globales
-# ─────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────
 @tree.error
 async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
     if isinstance(error, app_commands.MissingPermissions):
@@ -212,157 +214,35 @@ async def on_app_command_error(interaction: discord.Interaction, error: app_comm
     except discord.InteractionResponded:
         await interaction.followup.send(embed=embed, ephemeral=True)
 
-# ═══════════════════════════════════════════════════════════
+# ══════════════════════════════════════════════════════════
 #  AIDE — /help
-# ═══════════════════════════════════════════════════════════
+# ══════════════════════════════════════════════════════════
 
 @tree.command(name="help", description="Affiche l'aide complète de Firm1 Bot")
 async def help_cmd(interaction: discord.Interaction):
 
-    # Page 1 — Tickets
-    page1 = discord.Embed(
-        title="🎫 Tickets — Page 1/5",
-        description="Système de tickets de support.",
-        color=COLOR_PRIMARY,
-    )
-    page1.add_field(
-        name="📩 Membres",
-        value=(
-            "`/ticket` — Ouvrir un ticket\n"
-            "`/fermer` — Fermer votre ticket\n"
-            "`/ajouter @user` — Ajouter un membre\n"
-            "`/retirer @user` — Retirer un membre"
-        ),
-        inline=False,
-    )
-    page1.add_field(
-        name="⚙️ Administration",
-        value=(
-            "`/panel-tickets` — Envoyer le panel\n"
-            "`/config-tickets` — Voir la configuration\n"
-            "`/set-log-tickets` — Salon de logs\n"
-            "`/ajouter-role-ticket` — Ajouter rôle ping\n"
-            "`/retirer-role-ticket` — Retirer rôle ping\n"
-            "`/ajouter-categorie-ticket` — Ajouter catégorie\n"
-            "`/retirer-categorie-ticket` — Retirer catégorie\n"
-            "`/reset-config-tickets` — Réinitialiser"
-        ),
-        inline=False,
-    )
+    page1 = discord.Embed(title="🎫 Tickets — Page 1/5", description="Système de tickets de support.", color=COLOR_PRIMARY)
+    page1.add_field(name="📩 Membres", value=("`/ticket` — Ouvrir un ticket\n`/fermer` — Fermer votre ticket\n`/ajouter @user` — Ajouter un membre\n`/retirer @user` — Retirer un membre"), inline=False)
+    page1.add_field(name="⚙️ Administration", value=("`/panel-tickets` — Envoyer le panel\n`/config-tickets` — Voir la configuration\n`/set-log-tickets` — Salon de logs\n`/ajouter-role-ticket` — Ajouter rôle ping\n`/retirer-role-ticket` — Retirer rôle ping\n`/ajouter-categorie-ticket` — Ajouter catégorie\n`/retirer-categorie-ticket` — Retirer catégorie\n`/reset-config-tickets` — Réinitialiser"), inline=False)
     page1.set_footer(text="Firm1 Bot • Support Gaming")
 
-    # Page 2 — Modération
-    page2 = discord.Embed(
-        title="🔨 Modération — Page 2/5",
-        description="Commandes de modération manuelle.",
-        color=COLOR_ERROR,
-    )
-    page2.add_field(
-        name="👮 Sanctions",
-        value=(
-            "`/ban @user` — Bannir un membre\n"
-            "`/kick @user` — Expulser un membre\n"
-            "`/mute @user durée` — Mute (10s, 5m, 2h, 1j)\n"
-            "`/unmute @user` — Retirer le mute\n"
-            "`/warn @user raison` — Avertir\n"
-            "`/warns @user` — Voir les avertissements\n"
-            "`/clear 1-100` — Supprimer des messages\n"
-            "`/set-log-mod` — Salon de logs mod"
-        ),
-        inline=False,
-    )
+    page2 = discord.Embed(title="🔨 Modération — Page 2/5", description="Commandes de modération manuelle.", color=COLOR_ERROR)
+    page2.add_field(name="👮 Sanctions", value=("`/ban @user` — Bannir un membre\n`/kick @user` — Expulser un membre\n`/mute @user durée` — Mute (10s, 5m, 2h, 1j)\n`/unmute @user` — Retirer le mute\n`/warn @user raison` — Avertir\n`/warns @user` — Voir les avertissements\n`/clear 1-100` — Supprimer des messages\n`/set-log-mod` — Salon de logs mod"), inline=False)
     page2.set_footer(text="Firm1 Bot • Support Gaming")
 
-    # Page 3 — Auto-Modération
-    page3 = discord.Embed(
-        title="🤖 Auto-Modération — Page 3/5",
-        description="Modération automatique configurable.",
-        color=COLOR_WARNING,
-    )
-    page3.add_field(
-        name="⚙️ Configuration",
-        value=(
-            "`/config-auto-mod` — Voir la config\n"
-            "`/config-antispam` — Config antispam\n"
-            "`/ajouter-badword` — Ajouter badword\n"
-            "`/retirer-badword` — Retirer badword\n"
-            "`/liste-badwords` — Liste des badwords\n"
-            "`/salon-no-lien` — Toggle liens\n"
-            "`/salon-no-image` — Toggle images"
-        ),
-        inline=False,
-    )
-    page3.add_field(
-        name="🚨 Automatique",
-        value=(
-            "Mots interdits → suppression + MP\n"
-            "Liens → suppression par salon\n"
-            "Images → suppression par salon\n"
-            "Antispam → mute automatique"
-        ),
-        inline=False,
-    )
+    page3 = discord.Embed(title="🤖 Auto-Modération — Page 3/5", description="Modération automatique configurable.", color=COLOR_WARNING)
+    page3.add_field(name="⚙️ Configuration", value=("`/config-auto-mod` — Voir la config\n`/config-antispam` — Config antispam\n`/ajouter-badword` — Ajouter badword\n`/retirer-badword` — Retirer badword\n`/liste-badwords` — Liste des badwords\n`/salon-no-lien` — Toggle liens\n`/salon-no-image` — Toggle images"), inline=False)
+    page3.add_field(name="🚨 Automatique", value=("Mots interdits → suppression + MP\nLiens → suppression par salon\nImages → suppression par salon\nAntispam → mute automatique"), inline=False)
     page3.set_footer(text="Firm1 Bot • Support Gaming")
 
-    # Page 4 — Whitelist & Blacklist
-    page4 = discord.Embed(
-        title="🛡️ Whitelist & Blacklist — Page 4/5",
-        description="Gestion des accès membres.",
-        color=COLOR_INFO,
-    )
-    page4.add_field(
-        name="✅ Whitelist — bypass auto-mod",
-        value=(
-            "`/whitelist-ajouter @user` — Ajouter\n"
-            "`/whitelist-retirer @user` — Retirer\n"
-            "`/whitelist-liste` — Voir la liste"
-        ),
-        inline=False,
-    )
-    page4.add_field(
-        name="⛔ Blacklist — expulsion automatique",
-        value=(
-            "`/blacklist-ajouter @user` — Blacklister\n"
-            "`/blacklist-retirer @user` — Retirer\n"
-            "`/blacklist-liste` — Voir la liste"
-        ),
-        inline=False,
-    )
+    page4 = discord.Embed(title="🛡️ Whitelist & Blacklist — Page 4/5", description="Gestion des accès membres.", color=COLOR_INFO)
+    page4.add_field(name="✅ Whitelist — bypass auto-mod", value=("`/whitelist-ajouter @user` — Ajouter\n`/whitelist-retirer @user` — Retirer\n`/whitelist-liste` — Voir la liste"), inline=False)
+    page4.add_field(name="⛔ Blacklist — expulsion automatique", value=("`/blacklist-ajouter @user` — Blacklister\n`/blacklist-retirer @user` — Retirer\n`/blacklist-liste` — Voir la liste"), inline=False)
     page4.set_footer(text="Firm1 Bot • Support Gaming")
 
-    # Page 5 — Mini-Jeux & Utilitaires
-    page5 = discord.Embed(
-        title="🎮 Mini-Jeux & Utilitaires — Page 5/5",
-        description="Jeux et outils divers.",
-        color=COLOR_SUCCESS,
-    )
-    page5.add_field(
-        name="🎮 Mini-Jeux",
-        value=(
-            "`/pile-ou-face` — Lancer une pièce\n"
-            "`/dé` — Lancer un dé\n"
-            "`/rps` — Pierre-Papier-Ciseaux\n"
-            "`/nombre` — Deviner un nombre\n"
-            "`/8ball` — Boule magique\n"
-            "`/trivia` — Culture générale\n"
-            "`/pokemon` — Quel est ce Pokémon ?\n"
-            "`/pokemon-score` — Classement des dresseurs"
-        ),
-        inline=False,
-    )
-    page5.add_field(
-        name="🛠️ Utilitaires",
-        value=(
-            "`/ping` — Latence du bot\n"
-            "`/info-serveur` — Infos serveur\n"
-            "`/info-user` — Infos membre\n"
-            "`/avatar` — Avatar\n"
-            "`/say` — Parler à la place du bot\n"
-            "`/renommer-bot` — Changer le pseudo\n"
-            "`/help` — Cette aide"
-        ),
-        inline=False,
-    )
+    page5 = discord.Embed(title="🎮 Mini-Jeux & Utilitaires — Page 5/5", description="Jeux et outils divers.", color=COLOR_SUCCESS)
+    page5.add_field(name="🎮 Mini-Jeux", value=("`/pile-ou-face` — Lancer une pièce\n`/dé` — Lancer un dé\n`/rps` — Pierre-Papier-Ciseaux\n`/nombre` — Deviner un nombre\n`/8ball` — Boule magique\n`/trivia` — Culture générale\n`/pokemon` — Quel est ce Pokémon ?\n`/pokemon-score` — Classement des dresseurs"), inline=False)
+    page5.add_field(name="🛠️ Utilitaires", value=("`/ping` — Latence du bot\n`/info-serveur` — Infos serveur\n`/info-user` — Infos membre\n`/avatar` — Avatar\n`/say` — Parler à la place du bot\n`/renommer-bot` — Changer le pseudo\n`/help` — Cette aide"), inline=False)
     page5.set_footer(text="Firm1 Bot • Support Gaming")
 
     pages = [page1, page2, page3, page4, page5]
@@ -399,9 +279,9 @@ async def help_cmd(interaction: discord.Interaction):
     await interaction.response.send_message(embed=pages[0], view=view, ephemeral=True)
 
 
-# ═══════════════════════════════════════════════════════════
+# ══════════════════════════════════════════════════════════
 #  UTILITAIRES
-# ═══════════════════════════════════════════════════════════
+# ══════════════════════════════════════════════════════════
 
 @tree.command(name="ping", description="Affiche la latence du bot")
 async def ping_cmd(interaction: discord.Interaction):
@@ -510,9 +390,9 @@ async def rename_bot(interaction: discord.Interaction, nom: str):
         ), ephemeral=True)
 
 
-# ═══════════════════════════════════════════════════════════
+# ══════════════════════════════════════════════════════════
 #  SYSTÈME DE TICKETS
-# ═══════════════════════════════════════════════════════════
+# ══════════════════════════════════════════════════════════
 
 class TicketReasonModal(discord.ui.Modal, title="📋 Ouvrir un ticket"):
     raison = discord.ui.TextInput(
@@ -844,26 +724,10 @@ async def config_tickets(interaction: discord.Interaction):
         disc_cat = interaction.guild.get_channel(c.get("discord_category_id")) if c.get("discord_category_id") else None
         cats_value += f"{c.get('emoji','🎫')} **{c['label']}** → {disc_cat.mention if disc_cat else '`défaut`'}\n"
 
-    embed = discord.Embed(
-        title="⚙️ Configuration — Tickets",
-        color=COLOR_PRIMARY,
-        timestamp=datetime.datetime.now(datetime.timezone.utc),
-    )
-    embed.add_field(
-        name="📋 Salon de logs",
-        value=log_ch.mention if log_ch else "❌ Non configuré",
-        inline=False,
-    )
-    embed.add_field(
-        name="🔔 Rôles pingés",
-        value=" ".join(r.mention for r in ping_roles) if ping_roles else "❌ Aucun",
-        inline=False,
-    )
-    embed.add_field(
-        name="🗂️ Catégories",
-        value=cats_value if cats_value else "❌ Aucune",
-        inline=False,
-    )
+    embed = discord.Embed(title="⚙️ Configuration — Tickets", color=COLOR_PRIMARY, timestamp=datetime.datetime.now(datetime.timezone.utc))
+    embed.add_field(name="📋 Salon de logs",  value=log_ch.mention if log_ch else "❌ Non configuré", inline=False)
+    embed.add_field(name="🔔 Rôles pingés",   value=" ".join(r.mention for r in ping_roles) if ping_roles else "❌ Aucun", inline=False)
+    embed.add_field(name="🗂️ Catégories",     value=cats_value if cats_value else "❌ Aucune", inline=False)
     embed.set_footer(text=f"Firm1 • {interaction.guild.name}")
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
@@ -925,44 +789,22 @@ async def remove_ping_role(interaction: discord.Interaction, role: discord.Role)
 
 
 @tree.command(name="ajouter-categorie-ticket", description="[Admin] Ajoute une catégorie de ticket")
-@app_commands.describe(
-    label="Nom affiché",
-    categorie_discord="Catégorie Discord cible",
-    description="Description courte (optionnel)",
-    emoji="Emoji (optionnel)",
-)
+@app_commands.describe(label="Nom affiché", categorie_discord="Catégorie Discord cible", description="Description courte (optionnel)", emoji="Emoji (optionnel)")
 @app_commands.checks.has_permissions(administrator=True)
-async def add_ticket_category(
-    interaction: discord.Interaction,
-    label: str,
-    categorie_discord: discord.CategoryChannel,
-    description: str = "",
-    emoji: str = "🎫",
-):
+async def add_ticket_category(interaction: discord.Interaction, label: str, categorie_discord: discord.CategoryChannel, description: str = "", emoji: str = "🎫"):
     cfg        = get_guild_config(interaction.guild.id)
     categories = cfg.get("ticket_categories", [])
     if any(c["label"].lower() == label.lower() for c in categories):
-        await interaction.response.send_message(embed=firm1_embed(
-            "Déjà existant", f"**{label}** existe déjà.", color=COLOR_WARNING,
-        ), ephemeral=True)
+        await interaction.response.send_message(embed=firm1_embed("Déjà existant", f"**{label}** existe déjà.", color=COLOR_WARNING), ephemeral=True)
         return
     if len(categories) >= 25:
-        await interaction.response.send_message(embed=firm1_embed(
-            "Limite atteinte", "Maximum 25 catégories.", color=COLOR_ERROR,
-        ), ephemeral=True)
+        await interaction.response.send_message(embed=firm1_embed("Limite atteinte", "Maximum 25 catégories.", color=COLOR_ERROR), ephemeral=True)
         return
-    categories.append({
-        "label":               label,
-        "description":         description,
-        "emoji":               emoji,
-        "discord_category_id": categorie_discord.id,
-    })
+    categories.append({"label": label, "description": description, "emoji": emoji, "discord_category_id": categorie_discord.id})
     set_guild_config(interaction.guild.id, "ticket_categories", categories)
     await interaction.response.send_message(embed=firm1_embed(
-        "✅ Catégorie ajoutée",
-        f"{emoji} **{label}** → {categorie_discord.mention}",
-        color=COLOR_SUCCESS,
-        fields=[("Total", str(len(categories)), True)],
+        "✅ Catégorie ajoutée", f"{emoji} **{label}** → {categorie_discord.mention}",
+        color=COLOR_SUCCESS, fields=[("Total", str(len(categories)), True)],
     ), ephemeral=True)
 
 
@@ -974,16 +816,12 @@ async def remove_ticket_category(interaction: discord.Interaction, label: str):
     categories = cfg.get("ticket_categories", [])
     new_cats   = [c for c in categories if c["label"].lower() != label.lower()]
     if len(new_cats) == len(categories):
-        await interaction.response.send_message(embed=firm1_embed(
-            "Introuvable", f"Aucune catégorie **{label}**.", color=COLOR_WARNING,
-        ), ephemeral=True)
+        await interaction.response.send_message(embed=firm1_embed("Introuvable", f"Aucune catégorie **{label}**.", color=COLOR_WARNING), ephemeral=True)
         return
     set_guild_config(interaction.guild.id, "ticket_categories", new_cats)
     await interaction.response.send_message(embed=firm1_embed(
-        "✅ Catégorie supprimée",
-        f"**{label}** retirée.",
-        color=COLOR_SUCCESS,
-        fields=[("Restantes", str(len(new_cats)), True)],
+        "✅ Catégorie supprimée", f"**{label}** retirée.",
+        color=COLOR_SUCCESS, fields=[("Restantes", str(len(new_cats)), True)],
     ), ephemeral=True)
 
 
@@ -1006,50 +844,18 @@ async def reset_config_tickets(interaction: discord.Interaction):
 @app_commands.checks.has_permissions(administrator=True)
 async def panel_tickets(interaction: discord.Interaction):
     cfg        = get_guild_config(interaction.guild.id)
-    ping_roles = [
-        interaction.guild.get_role(rid)
-        for rid in cfg.get("ping_roles", [])
-        if interaction.guild.get_role(rid)
-    ]
+    ping_roles = [interaction.guild.get_role(rid) for rid in cfg.get("ping_roles", []) if interaction.guild.get_role(rid)]
     log_ch = interaction.guild.get_channel(cfg.get("log_channel_id")) if cfg.get("log_channel_id") else None
 
     embed = discord.Embed(
         title="🎫  Support — Firm1",
-        description=(
-            "```\n"
-            "  Vous rencontrez un problème sur le serveur ?\n"
-            "  Ouvrez un ticket et notre équipe de support\n"
-            "  vous répondra dans les meilleurs délais.\n"
-            "```"
-        ),
+        description="```\n  Vous rencontrez un problème sur le serveur ?\n  Ouvrez un ticket et notre équipe de support\n  vous répondra dans les meilleurs délais.\n```",
         color=COLOR_PRIMARY,
         timestamp=datetime.datetime.now(datetime.timezone.utc),
     )
-    embed.add_field(
-        name="📋 Comment ça fonctionne",
-        value=(
-            "**①** Cliquez sur `🎫 Ouvrir un ticket`\n"
-            "**②** Remplissez le formulaire\n"
-            "**③** Échangez avec le staff en privé\n"
-            "**④** Fermez le ticket une fois résolu"
-        ),
-        inline=True,
-    )
-    embed.add_field(
-        name="🔔 Staff de support",
-        value=" ".join(r.mention for r in ping_roles) if ping_roles else "*Aucun rôle configuré*",
-        inline=False,
-    )
-    embed.add_field(
-        name="📌 Règles importantes",
-        value=(
-            "• Un seul ticket actif par membre\n"
-            "• Soyez précis et respectueux\n"
-            "• Pas de spam ni d'abus\n"
-            "• Temps de réponse moyen : **< 2h**"
-        ),
-        inline=False,
-    )
+    embed.add_field(name="📋 Comment ça fonctionne", value=("**①** Cliquez sur `🎫 Ouvrir un ticket`\n**②** Remplissez le formulaire\n**③** Échangez avec le staff en privé\n**④** Fermez le ticket une fois résolu"), inline=True)
+    embed.add_field(name="🔔 Staff de support", value=" ".join(r.mention for r in ping_roles) if ping_roles else "*Aucun rôle configuré*", inline=False)
+    embed.add_field(name="📌 Règles importantes", value=("• Un seul ticket actif par membre\n• Soyez précis et respectueux\n• Pas de spam ni d'abus\n• Temps de réponse moyen : **< 2h**"), inline=False)
     embed.set_footer(text=f"Firm1 • {interaction.guild.name}")
     if interaction.guild.icon:
         embed.set_thumbnail(url=interaction.guild.icon.url)
@@ -1066,9 +872,9 @@ async def panel_tickets(interaction: discord.Interaction):
     ), ephemeral=True)
 
 
-# ═══════════════════════════════════════════════════════════
+# ══════════════════════════════════════════════════════════
 #  MODÉRATION
-# ═══════════════════════════════════════════════════════════
+# ══════════════════════════════════════════════════════════
 
 @tree.command(name="set-log-mod", description="[Admin] Définit le salon de logs de modération")
 @app_commands.describe(salon="Le salon qui recevra les logs de modération")
@@ -1079,11 +885,7 @@ async def set_log_mod(interaction: discord.Interaction, salon: discord.TextChann
         "✅ Salon de logs modération configuré",
         f"Toutes les actions seront loggées dans {salon.mention}.",
         color=COLOR_SUCCESS,
-        fields=[(
-            "📋 Actions loggées",
-            "🔨 Ban • 👢 Kick • 🔇 Mute • 🔊 Unmute\n⚠️ Warn • 🗑️ Clear • 🚫 Badword\n🔗 Lien • 🖼️ Image • 🚨 Antispam • ⛔ Blacklist",
-            False,
-        )],
+        fields=[("📋 Actions loggées", "🔨 Ban • 👢 Kick • 🔇 Mute • 🔊 Unmute\n⚠️ Warn • 🗑️ Clear • 🚫 Badword\n🔗 Lien • 🖼️ Image • 🚨 Antispam • ⛔ Blacklist", False)],
     ), ephemeral=True)
 
 
@@ -1092,33 +894,19 @@ async def set_log_mod(interaction: discord.Interaction, salon: discord.TextChann
 @app_commands.checks.has_permissions(ban_members=True)
 async def ban_cmd(interaction: discord.Interaction, membre: discord.Member, raison: str = "Aucune raison fournie"):
     if membre.top_role >= interaction.user.top_role:
-        await interaction.response.send_message(embed=firm1_embed(
-            "Erreur", "Rôle supérieur ou égal.", color=COLOR_ERROR,
-        ), ephemeral=True)
+        await interaction.response.send_message(embed=firm1_embed("Erreur", "Rôle supérieur ou égal.", color=COLOR_ERROR), ephemeral=True)
         return
     try:
-        await membre.send(embed=firm1_embed(
-            "🔨 Vous avez été banni",
-            f"**Serveur :** {interaction.guild.name}\n**Raison :** {raison}",
-            color=COLOR_ERROR,
-        ))
+        await membre.send(embed=firm1_embed("🔨 Vous avez été banni", f"**Serveur :** {interaction.guild.name}\n**Raison :** {raison}", color=COLOR_ERROR))
     except Exception:
         pass
     await membre.ban(reason=raison)
     await interaction.response.send_message(embed=firm1_embed(
-        "🔨 Membre banni",
-        f"{membre.mention} a été banni.",
-        color=COLOR_ERROR,
-        fields=[
-            ("👤 Membre",      str(membre),                   True),
-            ("📝 Raison",      raison,                        True),
-            ("🛡️ Modérateur",  interaction.user.mention,      True),
-        ],
+        "🔨 Membre banni", f"{membre.mention} a été banni.", color=COLOR_ERROR,
+        fields=[("👤 Membre", str(membre), True), ("📝 Raison", raison, True), ("🛡️ Modérateur", interaction.user.mention, True)],
     ))
     await send_mod_log(interaction.guild, title="🔨 Ban", color=COLOR_ERROR, fields=[
-        ("👤 Membre",     f"{membre} (`{membre.id}`)",    True),
-        ("📝 Raison",     raison,                         True),
-        ("🛡️ Modérateur", str(interaction.user),          True),
+        ("👤 Membre", f"{membre} (`{membre.id}`)", True), ("📝 Raison", raison, True), ("🛡️ Modérateur", str(interaction.user), True),
     ])
 
 
@@ -1127,82 +915,46 @@ async def ban_cmd(interaction: discord.Interaction, membre: discord.Member, rais
 @app_commands.checks.has_permissions(kick_members=True)
 async def kick_cmd(interaction: discord.Interaction, membre: discord.Member, raison: str = "Aucune raison fournie"):
     if membre.top_role >= interaction.user.top_role:
-        await interaction.response.send_message(embed=firm1_embed(
-            "Erreur", "Rôle supérieur ou égal.", color=COLOR_ERROR,
-        ), ephemeral=True)
+        await interaction.response.send_message(embed=firm1_embed("Erreur", "Rôle supérieur ou égal.", color=COLOR_ERROR), ephemeral=True)
         return
     try:
-        await membre.send(embed=firm1_embed(
-            "👢 Vous avez été expulsé",
-            f"**Serveur :** {interaction.guild.name}\n**Raison :** {raison}",
-            color=COLOR_WARNING,
-        ))
+        await membre.send(embed=firm1_embed("👢 Vous avez été expulsé", f"**Serveur :** {interaction.guild.name}\n**Raison :** {raison}", color=COLOR_WARNING))
     except Exception:
         pass
     await membre.kick(reason=raison)
     await interaction.response.send_message(embed=firm1_embed(
-        "👢 Membre expulsé",
-        f"{membre.mention} a été expulsé.",
-        color=COLOR_WARNING,
-        fields=[
-            ("👤 Membre",      str(membre),                   True),
-            ("📝 Raison",      raison,                        True),
-            ("🛡️ Modérateur",  interaction.user.mention,      True),
-        ],
+        "👢 Membre expulsé", f"{membre.mention} a été expulsé.", color=COLOR_WARNING,
+        fields=[("👤 Membre", str(membre), True), ("📝 Raison", raison, True), ("🛡️ Modérateur", interaction.user.mention, True)],
     ))
     await send_mod_log(interaction.guild, title="👢 Kick", color=COLOR_WARNING, fields=[
-        ("👤 Membre",     f"{membre} (`{membre.id}`)",    True),
-        ("📝 Raison",     raison,                         True),
-        ("🛡️ Modérateur", str(interaction.user),          True),
+        ("👤 Membre", f"{membre} (`{membre.id}`)", True), ("📝 Raison", raison, True), ("🛡️ Modérateur", str(interaction.user), True),
     ])
 
 
 @tree.command(name="mute", description="[Modo] Rendre muet un membre (ex: 10m, 2h, 1j)")
 @app_commands.describe(membre="Le membre à mute", duree="Durée : 10s, 5m, 2h, 1j…", raison="Raison")
 @app_commands.checks.has_permissions(moderate_members=True)
-async def mute_cmd(
-    interaction: discord.Interaction,
-    membre: discord.Member,
-    duree: str,
-    raison: str = "Aucune raison fournie",
-):
+async def mute_cmd(interaction: discord.Interaction, membre: discord.Member, duree: str, raison: str = "Aucune raison fournie"):
     secondes = parse_duration(duree)
     if secondes is None:
-        await interaction.response.send_message(embed=firm1_embed(
-            "Format invalide", "Utilisez : `10s`, `5m`, `2h`, `1j`.", color=COLOR_ERROR,
-        ), ephemeral=True)
+        await interaction.response.send_message(embed=firm1_embed("Format invalide", "Utilisez : `10s`, `5m`, `2h`, `1j`.", color=COLOR_ERROR), ephemeral=True)
         return
     if secondes > 2419200:
-        await interaction.response.send_message(embed=firm1_embed(
-            "Trop long", "Maximum **28 jours**.", color=COLOR_ERROR,
-        ), ephemeral=True)
+        await interaction.response.send_message(embed=firm1_embed("Trop long", "Maximum **28 jours**.", color=COLOR_ERROR), ephemeral=True)
         return
     until = discord.utils.utcnow() + datetime.timedelta(seconds=secondes)
     await membre.timeout(until, reason=raison)
     try:
-        await membre.send(embed=firm1_embed(
-            "🔇 Vous êtes en sourdine",
-            f"**Serveur :** {interaction.guild.name}\n**Durée :** {duree}\n**Raison :** {raison}",
-            color=COLOR_WARNING,
-        ))
+        await membre.send(embed=firm1_embed("🔇 Vous êtes en sourdine", f"**Serveur :** {interaction.guild.name}\n**Durée :** {duree}\n**Raison :** {raison}", color=COLOR_WARNING))
     except Exception:
         pass
     await interaction.response.send_message(embed=firm1_embed(
-        "🔇 Membre muet",
-        f"{membre.mention} est muet pendant **{duree}**.",
-        color=COLOR_WARNING,
-        fields=[
-            ("📝 Raison",      raison,                                True),
-            ("🛡️ Modérateur",  interaction.user.mention,              True),
-            ("⏰ Fin",          f"<t:{int(until.timestamp())}:R>",    True),
-        ],
+        "🔇 Membre muet", f"{membre.mention} est muet pendant **{duree}**.", color=COLOR_WARNING,
+        fields=[("📝 Raison", raison, True), ("🛡️ Modérateur", interaction.user.mention, True), ("⏰ Fin", f"<t:{int(until.timestamp())}:R>", True)],
     ))
     await send_mod_log(interaction.guild, title="🔇 Mute", color=COLOR_WARNING, fields=[
-        ("👤 Membre",     f"{membre} (`{membre.id}`)",    True),
-        ("⏱️ Durée",      duree,                          True),
-        ("📝 Raison",     raison,                         True),
-        ("🛡️ Modérateur", str(interaction.user),          True),
-        ("⏰ Fin",         f"<t:{int(until.timestamp())}:R>", True),
+        ("👤 Membre", f"{membre} (`{membre.id}`)", True), ("⏱️ Durée", duree, True),
+        ("📝 Raison", raison, True), ("🛡️ Modérateur", str(interaction.user), True), ("⏰ Fin", f"<t:{int(until.timestamp())}:R>", True),
     ])
 
 
@@ -1212,14 +964,11 @@ async def mute_cmd(
 async def unmute_cmd(interaction: discord.Interaction, membre: discord.Member):
     await membre.timeout(None)
     await interaction.response.send_message(embed=firm1_embed(
-        "🔊 Mute retiré",
-        f"{membre.mention} peut à nouveau s'exprimer.",
-        color=COLOR_SUCCESS,
+        "🔊 Mute retiré", f"{membre.mention} peut à nouveau s'exprimer.", color=COLOR_SUCCESS,
         fields=[("🛡️ Modérateur", interaction.user.mention, True)],
     ))
     await send_mod_log(interaction.guild, title="🔊 Unmute", color=COLOR_SUCCESS, fields=[
-        ("👤 Membre",     f"{membre} (`{membre.id}`)",    True),
-        ("🛡️ Modérateur", str(interaction.user),          True),
+        ("👤 Membre", f"{membre} (`{membre.id}`)", True), ("🛡️ Modérateur", str(interaction.user), True),
     ])
 
 
@@ -1229,28 +978,16 @@ async def unmute_cmd(interaction: discord.Interaction, membre: discord.Member):
 async def warn_cmd(interaction: discord.Interaction, membre: discord.Member, raison: str):
     total = add_warn(interaction.guild.id, membre.id, raison, str(interaction.user))
     try:
-        await membre.send(embed=firm1_embed(
-            "⚠️ Avertissement reçu",
-            f"**Serveur :** {interaction.guild.name}\n**Raison :** {raison}\n**Total :** {total}",
-            color=COLOR_WARNING,
-        ))
+        await membre.send(embed=firm1_embed("⚠️ Avertissement reçu", f"**Serveur :** {interaction.guild.name}\n**Raison :** {raison}\n**Total :** {total}", color=COLOR_WARNING))
     except Exception:
         pass
     await interaction.response.send_message(embed=firm1_embed(
-        "⚠️ Membre averti",
-        f"{membre.mention} a reçu un avertissement.",
-        color=COLOR_WARNING,
-        fields=[
-            ("📝 Raison",      raison,                        True),
-            ("🛡️ Modérateur",  interaction.user.mention,      True),
-            ("📊 Total warns", str(total),                    True),
-        ],
+        "⚠️ Membre averti", f"{membre.mention} a reçu un avertissement.", color=COLOR_WARNING,
+        fields=[("📝 Raison", raison, True), ("🛡️ Modérateur", interaction.user.mention, True), ("📊 Total warns", str(total), True)],
     ))
     await send_mod_log(interaction.guild, title="⚠️ Warn", color=COLOR_WARNING, fields=[
-        ("👤 Membre",      f"{membre} (`{membre.id}`)",   True),
-        ("📝 Raison",      raison,                        True),
-        ("🛡️ Modérateur",  str(interaction.user),         True),
-        ("📊 Total warns", str(total),                    True),
+        ("👤 Membre", f"{membre} (`{membre.id}`)", True), ("📝 Raison", raison, True),
+        ("🛡️ Modérateur", str(interaction.user), True), ("📊 Total warns", str(total), True),
     ])
 
 
@@ -1261,16 +998,12 @@ async def warns_cmd(interaction: discord.Interaction, membre: discord.Member):
     warns = get_warns(interaction.guild.id, membre.id)
     if not warns:
         await interaction.response.send_message(embed=firm1_embed(
-            "📋 Avertissements",
-            f"{membre.mention} n'a aucun avertissement.",
-            color=COLOR_SUCCESS,
+            "📋 Avertissements", f"{membre.mention} n'a aucun avertissement.", color=COLOR_SUCCESS,
         ), ephemeral=True)
         return
     desc = "\n".join(f"**{i+1}.** {w['raison']} — *par {w['by']}*" for i, w in enumerate(warns))
     await interaction.response.send_message(embed=firm1_embed(
-        f"⚠️ Avertissements de {membre.display_name}",
-        desc,
-        color=COLOR_WARNING,
+        f"⚠️ Avertissements de {membre.display_name}", desc, color=COLOR_WARNING,
         fields=[("📊 Total", str(len(warns)), True)],
     ), ephemeral=True)
 
@@ -1280,27 +1013,21 @@ async def warns_cmd(interaction: discord.Interaction, membre: discord.Member):
 @app_commands.checks.has_permissions(manage_messages=True)
 async def clear_cmd(interaction: discord.Interaction, nombre: int):
     if not 1 <= nombre <= 100:
-        await interaction.response.send_message(embed=firm1_embed(
-            "Erreur", "Entre **1** et **100**.", color=COLOR_ERROR,
-        ), ephemeral=True)
+        await interaction.response.send_message(embed=firm1_embed("Erreur", "Entre **1** et **100**.", color=COLOR_ERROR), ephemeral=True)
         return
     await interaction.response.defer(ephemeral=True)
     deleted = await interaction.channel.purge(limit=nombre)
     await interaction.followup.send(embed=firm1_embed(
-        "🗑️ Messages supprimés",
-        f"**{len(deleted)}** message(s) supprimé(s).",
-        color=COLOR_SUCCESS,
+        "🗑️ Messages supprimés", f"**{len(deleted)}** message(s) supprimé(s).", color=COLOR_SUCCESS,
     ), ephemeral=True)
     await send_mod_log(interaction.guild, title="🗑️ Clear", color=COLOR_INFO, fields=[
-        ("📊 Supprimés",  str(len(deleted)),             True),
-        ("📍 Salon",      interaction.channel.mention,   True),
-        ("🛡️ Modérateur", str(interaction.user),         True),
+        ("📊 Supprimés", str(len(deleted)), True), ("📍 Salon", interaction.channel.mention, True), ("🛡️ Modérateur", str(interaction.user), True),
     ])
 
 
-# ═══════════════════════════════════════════════════════════
+# ══════════════════════════════════════════════════════════
 #  AUTO-MODÉRATION
-# ═══════════════════════════════════════════════════════════
+# ══════════════════════════════════════════════════════════
 
 @tree.command(name="config-auto-mod", description="[Admin] Voir la config de l'auto-modération")
 @app_commands.checks.has_permissions(administrator=True)
@@ -1314,73 +1041,32 @@ async def config_automod(interaction: discord.Interaction):
     spam_mute   = cfg.get("spam_mute",   SPAM_MUTE_DEFAULT)
     spam_active = cfg.get("spam_active", True)
 
-    embed = discord.Embed(
-        title="⚙️ Auto-Modération — Config",
-        color=COLOR_PRIMARY,
-        timestamp=datetime.datetime.now(datetime.timezone.utc),
-    )
-    embed.add_field(
-        name="🤬 Mots interdits",
-        value=", ".join(f"`{w}`" for w in bad_words) if bad_words else "❌ Aucun",
-        inline=False,
-    )
-    embed.add_field(
-        name="🔗 Salons sans liens",
-        value=" ".join(c.mention for c in no_link_ch) if no_link_ch else "❌ Aucun",
-        inline=False,
-    )
-    embed.add_field(
-        name="🖼️ Salons sans images",
-        value=" ".join(c.mention for c in no_image_ch) if no_image_ch else "❌ Aucun",
-        inline=False,
-    )
-    embed.add_field(
-        name="🚨 Antispam",
-        value=(
-            f"{'🟢 Actif' if spam_active else '🔴 Désactivé'}\n"
-            f"**Seuil :** {spam_limit} msg en {spam_window}s\n"
-            f"**Sanction :** mute {spam_mute} min"
-        ),
-        inline=False,
-    )
+    embed = discord.Embed(title="⚙️ Auto-Modération — Config", color=COLOR_PRIMARY, timestamp=datetime.datetime.now(datetime.timezone.utc))
+    embed.add_field(name="🤢 Mots interdits",    value=", ".join(f"`{w}`" for w in bad_words) if bad_words else "❌ Aucun", inline=False)
+    embed.add_field(name="🔗 Salons sans liens",  value=" ".join(c.mention for c in no_link_ch) if no_link_ch else "❌ Aucun", inline=False)
+    embed.add_field(name="🖼️ Salons sans images", value=" ".join(c.mention for c in no_image_ch) if no_image_ch else "❌ Aucun", inline=False)
+    embed.add_field(name="🚨 Antispam", value=(f"{'🟢 Actif' if spam_active else '🔴 Désactivé'}\n**Seuil :** {spam_limit} msg en {spam_window}s\n**Sanction :** mute {spam_mute} min"), inline=False)
     embed.set_footer(text="Firm1 Bot • Support Gaming")
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
 @tree.command(name="config-antispam", description="[Admin] Personnalise les paramètres de l'antispam")
-@app_commands.describe(
-    limite="Nb messages avant sanction (2-50)",
-    fenetre="Fenêtre en secondes (1-60)",
-    mute_minutes="Durée du mute en minutes (1-1440)",
-    actif="Activer ou désactiver l'antispam",
-)
+@app_commands.describe(limite="Nb messages avant sanction (2-50)", fenetre="Fenêtre en secondes (1-60)", mute_minutes="Durée du mute en minutes (1-1440)", actif="Activer ou désactiver l'antispam")
 @app_commands.checks.has_permissions(administrator=True)
-async def config_antispam(
-    interaction: discord.Interaction,
-    limite: int | None = None,
-    fenetre: int | None = None,
-    mute_minutes: int | None = None,
-    actif: bool | None = None,
-):
+async def config_antispam(interaction: discord.Interaction, limite: int | None = None, fenetre: int | None = None, mute_minutes: int | None = None, actif: bool | None = None):
     if limite is not None:
         if not 2 <= limite <= 50:
-            await interaction.response.send_message(embed=firm1_embed(
-                "Valeur invalide", "Limite : entre **2** et **50**.", color=COLOR_ERROR,
-            ), ephemeral=True)
+            await interaction.response.send_message(embed=firm1_embed("Valeur invalide", "Limite : entre **2** et **50**.", color=COLOR_ERROR), ephemeral=True)
             return
         set_guild_config(interaction.guild.id, "spam_limit", limite)
     if fenetre is not None:
         if not 1 <= fenetre <= 60:
-            await interaction.response.send_message(embed=firm1_embed(
-                "Valeur invalide", "Fenêtre : entre **1** et **60** secondes.", color=COLOR_ERROR,
-            ), ephemeral=True)
+            await interaction.response.send_message(embed=firm1_embed("Valeur invalide", "Fenêtre : entre **1** et **60** secondes.", color=COLOR_ERROR), ephemeral=True)
             return
         set_guild_config(interaction.guild.id, "spam_window", fenetre)
     if mute_minutes is not None:
         if not 1 <= mute_minutes <= 1440:
-            await interaction.response.send_message(embed=firm1_embed(
-                "Valeur invalide", "Durée : entre **1** et **1440** minutes.", color=COLOR_ERROR,
-            ), ephemeral=True)
+            await interaction.response.send_message(embed=firm1_embed("Valeur invalide", "Durée : entre **1** et **1440** minutes.", color=COLOR_ERROR), ephemeral=True)
             return
         set_guild_config(interaction.guild.id, "spam_mute", mute_minutes)
     if actif is not None:
@@ -1395,11 +1081,7 @@ async def config_antispam(
         "🚨 Antispam mis à jour",
         f"{'🟢 Activé' if sa else '🔴 Désactivé'}",
         color=COLOR_SUCCESS if sa else COLOR_WARNING,
-        fields=[
-            ("📨 Seuil",    f"**{sl}** messages",   True),
-            ("⏱️ Fenêtre",  f"**{sw}** secondes",   True),
-            ("🔇 Sanction", f"Mute **{sm}** min",   True),
-        ],
+        fields=[("📨 Seuil", f"**{sl}** messages", True), ("⏱️ Fenêtre", f"**{sw}** secondes", True), ("🔇 Sanction", f"Mute **{sm}** min", True)],
     ), ephemeral=True)
 
 
@@ -1436,15 +1118,11 @@ async def remove_bad_word(interaction: discord.Interaction, mot: str):
     bad_words = cfg.get("bad_words", [])
     mot       = mot.lower()
     if mot not in bad_words:
-        await interaction.response.send_message(embed=firm1_embed(
-            "Introuvable", f"`{mot}` n'est pas dans la liste.", color=COLOR_WARNING,
-        ), ephemeral=True)
+        await interaction.response.send_message(embed=firm1_embed("Introuvable", f"`{mot}` n'est pas dans la liste.", color=COLOR_WARNING), ephemeral=True)
         return
     bad_words.remove(mot)
     set_guild_config(interaction.guild.id, "bad_words", bad_words)
-    await interaction.response.send_message(embed=firm1_embed(
-        "✅ Mot retiré", f"`{mot}` n'est plus interdit.", color=COLOR_SUCCESS,
-    ), ephemeral=True)
+    await interaction.response.send_message(embed=firm1_embed("✅ Mot retiré", f"`{mot}` n'est plus interdit.", color=COLOR_SUCCESS), ephemeral=True)
 
 
 @tree.command(name="liste-badwords", description="[Admin] Affiche tous les mots interdits")
@@ -1453,17 +1131,13 @@ async def list_bad_words(interaction: discord.Interaction):
     cfg       = get_guild_config(interaction.guild.id)
     bad_words = cfg.get("bad_words", [])
     if not bad_words:
-        await interaction.response.send_message(embed=firm1_embed(
-            "📋 Badwords", "Aucun mot interdit configuré.", color=COLOR_INFO,
-        ), ephemeral=True)
+        await interaction.response.send_message(embed=firm1_embed("📋 Badwords", "Aucun mot interdit configuré.", color=COLOR_INFO), ephemeral=True)
         return
     mots_text = ", ".join(f"`{w}`" for w in bad_words)
     if len(mots_text) > 1000:
         mots_text = mots_text[:997] + "..."
     await interaction.response.send_message(embed=firm1_embed(
-        "📋 Liste des Badwords",
-        mots_text,
-        color=COLOR_WARNING,
+        "📋 Liste des Badwords", mots_text, color=COLOR_WARNING,
         fields=[("📊 Total", str(len(bad_words)), True)],
     ), ephemeral=True)
 
@@ -1477,16 +1151,12 @@ async def toggle_no_link(interaction: discord.Interaction, salon: discord.TextCh
     no_link = cfg.get("no_link_channels", [])
     if target.id in no_link:
         no_link.remove(target.id)
-        msg   = f"✅ Les liens sont désormais **autorisés** dans {target.mention}."
-        color = COLOR_SUCCESS
+        msg, color = f"✅ Les liens sont désormais **autorisés** dans {target.mention}.", COLOR_SUCCESS
     else:
         no_link.append(target.id)
-        msg   = f"🔗 Les liens sont désormais **interdits** dans {target.mention}."
-        color = COLOR_WARNING
+        msg, color = f"🔗 Les liens sont désormais **interdits** dans {target.mention}.", COLOR_WARNING
     set_guild_config(interaction.guild.id, "no_link_channels", no_link)
-    await interaction.response.send_message(embed=firm1_embed(
-        "Salon no-lien mis à jour", msg, color=color,
-    ), ephemeral=True)
+    await interaction.response.send_message(embed=firm1_embed("Salon no-lien mis à jour", msg, color=color), ephemeral=True)
 
 
 @tree.command(name="salon-no-image", description="[Admin] Toggle interdiction d'images dans un salon")
@@ -1498,21 +1168,17 @@ async def toggle_no_image(interaction: discord.Interaction, salon: discord.TextC
     no_image = cfg.get("no_image_channels", [])
     if target.id in no_image:
         no_image.remove(target.id)
-        msg   = f"✅ Les images sont désormais **autorisées** dans {target.mention}."
-        color = COLOR_SUCCESS
+        msg, color = f"✅ Les images sont désormais **autorisées** dans {target.mention}.", COLOR_SUCCESS
     else:
         no_image.append(target.id)
-        msg   = f"🖼️ Les images sont désormais **interdites** dans {target.mention}."
-        color = COLOR_WARNING
+        msg, color = f"🖼️ Les images sont désormais **interdites** dans {target.mention}.", COLOR_WARNING
     set_guild_config(interaction.guild.id, "no_image_channels", no_image)
-    await interaction.response.send_message(embed=firm1_embed(
-        "Salon no-image mis à jour", msg, color=color,
-    ), ephemeral=True)
+    await interaction.response.send_message(embed=firm1_embed("Salon no-image mis à jour", msg, color=color), ephemeral=True)
 
 
-# ═══════════════════════════════════════════════════════════
+# ══════════════════════════════════════════════════════════
 #  WHITELIST & BLACKLIST
-# ═══════════════════════════════════════════════════════════
+# ══════════════════════════════════════════════════════════
 
 @tree.command(name="whitelist-ajouter", description="[Admin] Ajoute un membre à la whitelist")
 @app_commands.describe(membre="Le membre à whitelister")
@@ -1521,21 +1187,16 @@ async def wl_add(interaction: discord.Interaction, membre: discord.Member):
     cfg = get_guild_config(interaction.guild.id)
     wl  = cfg.get("whitelist", [])
     if membre.id in wl:
-        await interaction.response.send_message(embed=firm1_embed(
-            "Déjà présent", f"{membre.mention} est déjà whitelisté.", color=COLOR_WARNING,
-        ), ephemeral=True)
+        await interaction.response.send_message(embed=firm1_embed("Déjà présent", f"{membre.mention} est déjà whitelisté.", color=COLOR_WARNING), ephemeral=True)
         return
     wl.append(membre.id)
     set_guild_config(interaction.guild.id, "whitelist", wl)
     await interaction.response.send_message(embed=firm1_embed(
-        "✅ Whitelisté",
-        f"{membre.mention} bypass désormais l'auto-mod.",
-        color=COLOR_SUCCESS,
+        "✅ Whitelisté", f"{membre.mention} bypass désormais l'auto-mod.", color=COLOR_SUCCESS,
         fields=[("📊 Total", str(len(wl)), True)],
     ), ephemeral=True)
     await send_mod_log(interaction.guild, title="📋 Whitelist — Ajout", color=COLOR_INFO, fields=[
-        ("👤 Membre", f"{membre} (`{membre.id}`)", True),
-        ("🛡️ Admin",  str(interaction.user),       True),
+        ("👤 Membre", f"{membre} (`{membre.id}`)", True), ("🛡️ Admin", str(interaction.user), True),
     ])
 
 
@@ -1546,17 +1207,11 @@ async def wl_remove(interaction: discord.Interaction, membre: discord.Member):
     cfg = get_guild_config(interaction.guild.id)
     wl  = cfg.get("whitelist", [])
     if membre.id not in wl:
-        await interaction.response.send_message(embed=firm1_embed(
-            "Introuvable", f"{membre.mention} n'est pas whitelisté.", color=COLOR_WARNING,
-        ), ephemeral=True)
+        await interaction.response.send_message(embed=firm1_embed("Introuvable", f"{membre.mention} n'est pas whitelisté.", color=COLOR_WARNING), ephemeral=True)
         return
     wl.remove(membre.id)
     set_guild_config(interaction.guild.id, "whitelist", wl)
-    await interaction.response.send_message(embed=firm1_embed(
-        "✅ Retiré",
-        f"{membre.mention} est soumis à l'auto-mod.",
-        color=COLOR_SUCCESS,
-    ), ephemeral=True)
+    await interaction.response.send_message(embed=firm1_embed("✅ Retiré", f"{membre.mention} est soumis à l'auto-mod.", color=COLOR_SUCCESS), ephemeral=True)
 
 
 @tree.command(name="whitelist-liste", description="[Admin] Voir la whitelist")
@@ -1566,10 +1221,7 @@ async def wl_list(interaction: discord.Interaction):
     wl   = cfg.get("whitelist", [])
     desc = "\n".join(f"<@{uid}> (`{uid}`)" for uid in wl) if wl else "Aucun membre whitelisté."
     await interaction.response.send_message(embed=firm1_embed(
-        "✅ Whitelist",
-        desc,
-        color=COLOR_INFO,
-        fields=[("📊 Total", str(len(wl)), True)],
+        "✅ Whitelist", desc, color=COLOR_INFO, fields=[("📊 Total", str(len(wl)), True)],
     ), ephemeral=True)
 
 
@@ -1583,11 +1235,7 @@ async def bl_add(interaction: discord.Interaction, membre: discord.Member, raiso
         bl.append(membre.id)
         set_guild_config(interaction.guild.id, "blacklist", bl)
     try:
-        await membre.send(embed=firm1_embed(
-            "⛔ Vous avez été blacklisté",
-            f"**Serveur :** {interaction.guild.name}\n**Raison :** {raison}",
-            color=COLOR_ERROR,
-        ))
+        await membre.send(embed=firm1_embed("⛔ Vous avez été blacklisté", f"**Serveur :** {interaction.guild.name}\n**Raison :** {raison}", color=COLOR_ERROR))
     except Exception:
         pass
     try:
@@ -1595,18 +1243,11 @@ async def bl_add(interaction: discord.Interaction, membre: discord.Member, raiso
     except Exception:
         pass
     await interaction.response.send_message(embed=firm1_embed(
-        "⛔ Membre blacklisté",
-        f"{membre.mention} a été blacklisté et expulsé.",
-        color=COLOR_ERROR,
-        fields=[
-            ("📝 Raison",  raison,             True),
-            ("📊 Total",   str(len(bl)),        True),
-        ],
+        "⛔ Membre blacklisté", f"{membre.mention} a été blacklisté et expulsé.", color=COLOR_ERROR,
+        fields=[("📝 Raison", raison, True), ("📊 Total", str(len(bl)), True)],
     ), ephemeral=True)
     await send_mod_log(interaction.guild, title="⛔ Blacklist — Ajout", color=COLOR_ERROR, fields=[
-        ("👤 Membre",  f"{membre} (`{membre.id}`)",    True),
-        ("📝 Raison",  raison,                         True),
-        ("🛡️ Admin",   str(interaction.user),          True),
+        ("👤 Membre", f"{membre} (`{membre.id}`)", True), ("📝 Raison", raison, True), ("🛡️ Admin", str(interaction.user), True),
     ])
 
 
@@ -1617,17 +1258,11 @@ async def bl_remove(interaction: discord.Interaction, membre: discord.User):
     cfg = get_guild_config(interaction.guild.id)
     bl  = cfg.get("blacklist", [])
     if membre.id not in bl:
-        await interaction.response.send_message(embed=firm1_embed(
-            "Introuvable", f"{membre.mention} n'est pas blacklisté.", color=COLOR_WARNING,
-        ), ephemeral=True)
+        await interaction.response.send_message(embed=firm1_embed("Introuvable", f"{membre.mention} n'est pas blacklisté.", color=COLOR_WARNING), ephemeral=True)
         return
     bl.remove(membre.id)
     set_guild_config(interaction.guild.id, "blacklist", bl)
-    await interaction.response.send_message(embed=firm1_embed(
-        "✅ Retiré",
-        f"{membre.mention} peut à nouveau rejoindre le serveur.",
-        color=COLOR_SUCCESS,
-    ), ephemeral=True)
+    await interaction.response.send_message(embed=firm1_embed("✅ Retiré", f"{membre.mention} peut à nouveau rejoindre le serveur.", color=COLOR_SUCCESS), ephemeral=True)
 
 
 @tree.command(name="blacklist-liste", description="[Admin] Voir la blacklist")
@@ -1637,23 +1272,19 @@ async def bl_list(interaction: discord.Interaction):
     bl   = cfg.get("blacklist", [])
     desc = "\n".join(f"<@{uid}> (`{uid}`)" for uid in bl) if bl else "Aucun membre blacklisté."
     await interaction.response.send_message(embed=firm1_embed(
-        "⛔ Blacklist",
-        desc,
-        color=COLOR_ERROR,
-        fields=[("📊 Total", str(len(bl)), True)],
+        "⛔ Blacklist", desc, color=COLOR_ERROR, fields=[("📊 Total", str(len(bl)), True)],
     ), ephemeral=True)
 
 
-# ═══════════════════════════════════════════════════════════
+# ══════════════════════════════════════════════════════════
 #  MINI-JEUX
-# ═══════════════════════════════════════════════════════════
+# ══════════════════════════════════════════════════════════
 
 @tree.command(name="pile-ou-face", description="Lance une pièce")
 async def coin_flip(interaction: discord.Interaction):
     result = random.choice(["🪙 Pile", "🪙 Face"])
     await interaction.response.send_message(embed=firm1_embed(
-        "Pile ou Face ?",
-        f"La pièce est tombée sur… **{result}** !",
+        "Pile ou Face ?", f"La pièce est tombée sur… **{result}** !",
         color=random.choice([COLOR_SUCCESS, COLOR_WARNING]),
     ))
 
@@ -1662,20 +1293,15 @@ async def coin_flip(interaction: discord.Interaction):
 @app_commands.describe(faces="Nombre de faces (défaut : 6)")
 async def dice_roll(interaction: discord.Interaction, faces: int = 6):
     if faces < 2:
-        await interaction.response.send_message(embed=firm1_embed(
-            "Erreur", "Au moins **2 faces**.", color=COLOR_ERROR,
-        ), ephemeral=True)
+        await interaction.response.send_message(embed=firm1_embed("Erreur", "Au moins **2 faces**.", color=COLOR_ERROR), ephemeral=True)
         return
     await interaction.response.send_message(embed=firm1_embed(
-        f"🎲 Dé à {faces} faces",
-        f"Résultat : **{random.randint(1, faces)}**",
-        color=COLOR_INFO,
+        f"🎲 Dé à {faces} faces", f"Résultat : **{random.randint(1, faces)}**", color=COLOR_INFO,
     ))
 
 
 RPS_CHOICES = {"pierre": "🪨", "papier": "📄", "ciseaux": "✂️"}
 RPS_WINS    = {"pierre": "ciseaux", "papier": "pierre", "ciseaux": "papier"}
-
 
 @tree.command(name="rps", description="Pierre-Papier-Ciseaux contre le bot")
 @app_commands.describe(choix="Votre choix")
@@ -1694,13 +1320,8 @@ async def rps(interaction: discord.Interaction, choix: app_commands.Choice[str])
     else:
         result, color = "Vous perdez… 😢", COLOR_ERROR
     await interaction.response.send_message(embed=firm1_embed(
-        "Pierre-Papier-Ciseaux",
-        result,
-        color=color,
-        fields=[
-            ("Vous", f"{RPS_CHOICES[player]} {player.title()}",         True),
-            ("Bot",  f"{RPS_CHOICES[bot_choice]} {bot_choice.title()}", True),
-        ],
+        "Pierre-Papier-Ciseaux", result, color=color,
+        fields=[("Vous", f"{RPS_CHOICES[player]} {player.title()}", True), ("Bot", f"{RPS_CHOICES[bot_choice]} {bot_choice.title()}", True)],
     ))
 
 
@@ -1719,30 +1340,23 @@ EIGHTBALL_REPLIES = [
     ("❌ Très douteux.",                           COLOR_ERROR),
 ]
 
-
 @tree.command(name="8ball", description="Posez une question à la boule magique")
 @app_commands.describe(question="Votre question")
 async def eightball(interaction: discord.Interaction, question: str):
     answer, color = random.choice(EIGHTBALL_REPLIES)
     await interaction.response.send_message(embed=firm1_embed(
-        "🎱 Boule Magique",
-        answer,
-        color=color,
-        fields=[("❓ Question", question, False)],
+        "🎱 Boule Magique", answer, color=color, fields=[("❓ Question", question, False)],
     ))
 
 
 active_guess_games: dict[int, int] = {}
-
 
 @tree.command(name="nombre", description="Devinez le nombre secret !")
 @app_commands.describe(maximum="Valeur maximale (défaut : 100)")
 async def guess_number(interaction: discord.Interaction, maximum: int = 100):
     channel_id = interaction.channel_id
     if channel_id in active_guess_games:
-        await interaction.response.send_message(embed=firm1_embed(
-            "Partie en cours", "Une partie est déjà en cours ici.", color=COLOR_WARNING,
-        ), ephemeral=True)
+        await interaction.response.send_message(embed=firm1_embed("Partie en cours", "Une partie est déjà en cours ici.", color=COLOR_WARNING), ephemeral=True)
         return
 
     number = random.randint(1, maximum)
@@ -1763,25 +1377,15 @@ async def guess_number(interaction: discord.Interaction, maximum: int = 100):
             guess = int(msg.content)
             if guess == number:
                 active_guess_games.pop(channel_id, None)
-                await msg.channel.send(embed=firm1_embed(
-                    "🎉 Bonne réponse !",
-                    f"{msg.author.mention} a trouvé **{number}** !",
-                    color=COLOR_SUCCESS,
-                ))
+                await msg.channel.send(embed=firm1_embed("🎉 Bonne réponse !", f"{msg.author.mention} a trouvé **{number}** !", color=COLOR_SUCCESS))
                 break
             elif guess < number:
-                await msg.channel.send(embed=firm1_embed(
-                    "💡 Trop petit !", f"Plus grand que {guess}.", color=COLOR_WARNING,
-                ), delete_after=5)
+                await msg.channel.send(embed=firm1_embed("💡 Trop petit !", f"Plus grand que {guess}.", color=COLOR_WARNING), delete_after=5)
             else:
-                await msg.channel.send(embed=firm1_embed(
-                    "💡 Trop grand !", f"Plus petit que {guess}.", color=COLOR_WARNING,
-                ), delete_after=5)
+                await msg.channel.send(embed=firm1_embed("💡 Trop grand !", f"Plus petit que {guess}.", color=COLOR_WARNING), delete_after=5)
     except asyncio.TimeoutError:
         active_guess_games.pop(channel_id, None)
-        await interaction.channel.send(embed=firm1_embed(
-            "⏰ Temps écoulé !", f"Le nombre était **{number}**.", color=COLOR_ERROR,
-        ))
+        await interaction.channel.send(embed=firm1_embed("⏰ Temps écoulé !", f"Le nombre était **{number}**.", color=COLOR_ERROR))
 
 
 TRIVIA_QUESTIONS = [
@@ -1794,7 +1398,6 @@ TRIVIA_QUESTIONS = [
     {"question": "Combien de cordes a une guitare standard ?",    "options": ["4",            "5",       "6",               "7"],          "correct": 2},
     {"question": "Quel pays a inventé les spaghettis ?",          "options": ["France",       "Chine",   "Italie",          "Espagne"],    "correct": 2},
 ]
-
 
 @tree.command(name="trivia", description="Question de culture générale")
 async def trivia(interaction: discord.Interaction):
@@ -1817,138 +1420,122 @@ async def trivia(interaction: discord.Interaction):
     try:
         msg = await bot.wait_for("message", timeout=20.0, check=check)
         if ["A", "B", "C", "D"].index(msg.content.upper()) == q["correct"]:
-            await interaction.channel.send(embed=firm1_embed(
-                "✅ Bonne réponse !",
-                f"C'était bien **{q['options'][q['correct']]}** ! 🎉",
-                color=COLOR_SUCCESS,
-            ))
+            await interaction.channel.send(embed=firm1_embed("✅ Bonne réponse !", f"C'était bien **{q['options'][q['correct']]}** ! 🎉", color=COLOR_SUCCESS))
         else:
-            await interaction.channel.send(embed=firm1_embed(
-                "❌ Mauvaise réponse !",
-                f"La bonne réponse était **{q['options'][q['correct']]}**.",
-                color=COLOR_ERROR,
-            ))
+            await interaction.channel.send(embed=firm1_embed("❌ Mauvaise réponse !", f"La bonne réponse était **{q['options'][q['correct']]}**.", color=COLOR_ERROR))
     except asyncio.TimeoutError:
-        await interaction.channel.send(embed=firm1_embed(
-            "⏰ Temps écoulé !",
-            f"La bonne réponse était **{q['options'][q['correct']]}**.",
-            color=COLOR_ERROR,
-        ))
+        await interaction.channel.send(embed=firm1_embed("⏰ Temps écoulé !", f"La bonne réponse était **{q['options'][q['correct']]}**.", color=COLOR_ERROR))
 
 
-
-
-# ═══════════════════════════════════════════════════════════
+# ══════════════════════════════════════════════════════════
 #  POKÉMON — Qui est ce Pokémon ?
-# ═══════════════════════════════════════════════════════════
-
-import unicodedata as _ud
+# ══════════════════════════════════════════════════════════
 
 POKEMON_LIST = [
     # ═══════════════════════════════════════
     # GEN 1 — Kanto (001–151)
     # ═══════════════════════════════════════
-    {"id": 1, "fr": "Bulbizarre"},
-    {"id": 2, "fr": "Herbizarre"},
-    {"id": 3, "fr": "Florizarre"},
-    {"id": 4, "fr": "Salamèche"},
-    {"id": 5, "fr": "Reptincel"},
-    {"id": 6, "fr": "Dracaufeu"},
-    {"id": 7, "fr": "Carapuce"},
-    {"id": 8, "fr": "Carabaffe"},
-    {"id": 9, "fr": "Tortank"},
-    {"id": 10, "fr": "Chenipan"},
-    {"id": 11, "fr": "Chrysacier"},
-    {"id": 12, "fr": "Papilusion"},
-    {"id": 13, "fr": "Aspicot"},
-    {"id": 14, "fr": "Coconfort"},
-    {"id": 15, "fr": "Dardargnan"},
-    {"id": 16, "fr": "Roucool"},
-    {"id": 17, "fr": "Roucoups"},
-    {"id": 18, "fr": "Roucarnage"},
-    {"id": 19, "fr": "Rattata"},
-    {"id": 20, "fr": "Rattatac"},
-    {"id": 21, "fr": "Piafabec"},
-    {"id": 22, "fr": "Rapasdepic"},
-    {"id": 23, "fr": "Abo"},
-    {"id": 24, "fr": "Arbok"},
-    {"id": 25, "fr": "Pikachu"},
-    {"id": 26, "fr": "Raichu"},
-    {"id": 27, "fr": "Sabelette"},
-    {"id": 28, "fr": "Sablaireau"},
-    {"id": 29, "fr": "Nidoran♀"},
-    {"id": 30, "fr": "Nidorina"},
-    {"id": 31, "fr": "Nidoqueen"},
-    {"id": 32, "fr": "Nidoran♂"},
-    {"id": 33, "fr": "Nidorino"},
-    {"id": 34, "fr": "Nidoking"},
-    {"id": 35, "fr": "Mélofée"},
-    {"id": 36, "fr": "Mélodelfe"},
-    {"id": 37, "fr": "Goupix"},
-    {"id": 38, "fr": "Feunard"},
-    {"id": 39, "fr": "Rondoudou"},
-    {"id": 40, "fr": "Grodoudou"},
-    {"id": 41, "fr": "Nosferapti"},
-    {"id": 42, "fr": "Nosferalto"},
-    {"id": 43, "fr": "Mystherbe"},
-    {"id": 44, "fr": "Ortide"},
-    {"id": 45, "fr": "Rafflesia"},
-    {"id": 46, "fr": "Paras"},
-    {"id": 47, "fr": "Parasect"},
-    {"id": 48, "fr": "Mimitoss"},
-    {"id": 49, "fr": "Aéromite"},
-    {"id": 50, "fr": "Taupiqueur"},
-    {"id": 51, "fr": "Triopikeur"},
-    {"id": 52, "fr": "Miaouss"},
-    {"id": 53, "fr": "Persian"},
-    {"id": 54, "fr": "Psykokwak"},
-    {"id": 55, "fr": "Akwakwak"},
-    {"id": 56, "fr": "Férosinge"},
-    {"id": 57, "fr": "Colossinge"},
-    {"id": 58, "fr": "Caninos"},
-    {"id": 59, "fr": "Arcanin"},
-    {"id": 60, "fr": "Ptitard"},
-    {"id": 61, "fr": "Têtarte"},
-    {"id": 62, "fr": "Tartard"},
-    {"id": 63, "fr": "Abra"},
-    {"id": 64, "fr": "Kadabra"},
-    {"id": 65, "fr": "Alakazam"},
-    {"id": 66, "fr": "Machoc"},
-    {"id": 67, "fr": "Machopeur"},
-    {"id": 68, "fr": "Mackogneur"},
-    {"id": 69, "fr": "Chétiflor"},
-    {"id": 70, "fr": "Boustiflor"},
-    {"id": 71, "fr": "Empiflor"},
-    {"id": 72, "fr": "Tentacool"},
-    {"id": 73, "fr": "Tentacruel"},
-    {"id": 74, "fr": "Racaillou"},
-    {"id": 75, "fr": "Gravalanch"},
-    {"id": 76, "fr": "Grolem"},
-    {"id": 77, "fr": "Ponyta"},
-    {"id": 78, "fr": "Galopa"},
-    {"id": 79, "fr": "Ramoloss"},
-    {"id": 80, "fr": "Flagadoss"},
-    {"id": 81, "fr": "Magnéti"},
-    {"id": 82, "fr": "Magnéton"},
-    {"id": 83, "fr": "Canarticho"},
-    {"id": 84, "fr": "Doduo"},
-    {"id": 85, "fr": "Dodrio"},
-    {"id": 86, "fr": "Otaria"},
-    {"id": 87, "fr": "Lamantine"},
-    {"id": 88, "fr": "Tadmorv"},
-    {"id": 89, "fr": "Grotadmorv"},
-    {"id": 90, "fr": "Kokiyas"},
-    {"id": 91, "fr": "Crustabri"},
-    {"id": 92, "fr": "Fantominus"},
-    {"id": 93, "fr": "Spectrum"},
-    {"id": 94, "fr": "Ectoplasma"},
-    {"id": 95, "fr": "Onix"},
-    {"id": 96, "fr": "Soporifik"},
-    {"id": 97, "fr": "Hypnomade"},
-    {"id": 98, "fr": "Krabby"},
-    {"id": 99, "fr": "Krabboss"},
+    {"id": 1,   "fr": "Bulbizarre"},
+    {"id": 2,   "fr": "Herbizarre"},
+    {"id": 3,   "fr": "Florizarre"},
+    {"id": 4,   "fr": "Salamèche"},
+    {"id": 5,   "fr": "Reptincel"},
+    {"id": 6,   "fr": "Dracaufeu"},
+    {"id": 7,   "fr": "Carapuce"},
+    {"id": 8,   "fr": "Carabaffe"},
+    {"id": 9,   "fr": "Tortank"},
+    {"id": 10,  "fr": "Chenipan"},
+    {"id": 11,  "fr": "Chrysacier"},
+    {"id": 12,  "fr": "Papilusion"},
+    {"id": 13,  "fr": "Aspicot"},
+    {"id": 14,  "fr": "Coconfort"},
+    {"id": 15,  "fr": "Dardargnan"},
+    {"id": 16,  "fr": "Roucool"},
+    {"id": 17,  "fr": "Roucoups"},
+    {"id": 18,  "fr": "Roucarnage"},
+    {"id": 19,  "fr": "Rattata"},
+    {"id": 20,  "fr": "Rattatac"},
+    {"id": 21,  "fr": "Piafabec"},
+    {"id": 22,  "fr": "Rapasdepic"},
+    {"id": 23,  "fr": "Abo"},
+    {"id": 24,  "fr": "Arbok"},
+    {"id": 25,  "fr": "Pikachu"},
+    {"id": 26,  "fr": "Raichu"},
+    {"id": 27,  "fr": "Sabelette"},
+    {"id": 28,  "fr": "Sablaireau"},
+    {"id": 29,  "fr": "Nidoran♀"},
+    {"id": 30,  "fr": "Nidorina"},
+    {"id": 31,  "fr": "Nidoqueen"},
+    {"id": 32,  "fr": "Nidoran♂"},
+    {"id": 33,  "fr": "Nidorino"},
+    {"id": 34,  "fr": "Nidoking"},
+    {"id": 35,  "fr": "Mélofée"},
+    {"id": 36,  "fr": "Mélodelfe"},
+    {"id": 37,  "fr": "Goupix"},
+    {"id": 38,  "fr": "Feunard"},
+    {"id": 39,  "fr": "Rondoudou"},
+    {"id": 40,  "fr": "Grodoudou"},
+    {"id": 41,  "fr": "Nosferapti"},
+    {"id": 42,  "fr": "Nosferalto"},
+    {"id": 43,  "fr": "Mystherbe"},
+    {"id": 44,  "fr": "Ortide"},
+    {"id": 45,  "fr": "Rafflesia"},
+    {"id": 46,  "fr": "Paras"},
+    {"id": 47,  "fr": "Parasect"},
+    {"id": 48,  "fr": "Mimitoss"},
+    {"id": 49,  "fr": "Aéromite"},
+    {"id": 50,  "fr": "Taupiqueur"},
+    {"id": 51,  "fr": "Triopikeur"},
+    {"id": 52,  "fr": "Miaouss"},
+    {"id": 53,  "fr": "Persian"},
+    {"id": 54,  "fr": "Psykokwak"},
+    {"id": 55,  "fr": "Akwakwak"},
+    {"id": 56,  "fr": "Férosinge"},
+    {"id": 57,  "fr": "Colossinge"},
+    {"id": 58,  "fr": "Caninos"},
+    {"id": 59,  "fr": "Arcanin"},
+    {"id": 60,  "fr": "Ptitard"},
+    {"id": 61,  "fr": "Têtarte"},
+    {"id": 62,  "fr": "Tartard"},
+    {"id": 63,  "fr": "Abra"},
+    {"id": 64,  "fr": "Kadabra"},
+    {"id": 65,  "fr": "Alakazam"},
+    {"id": 66,  "fr": "Machoc"},
+    {"id": 67,  "fr": "Machopeur"},
+    {"id": 68,  "fr": "Mackogneur"},
+    {"id": 69,  "fr": "Chétiflor"},
+    {"id": 70,  "fr": "Boustiflor"},
+    {"id": 71,  "fr": "Empiflor"},
+    {"id": 72,  "fr": "Tentacool"},
+    {"id": 73,  "fr": "Tentacruel"},
+    {"id": 74,  "fr": "Racaillou"},
+    {"id": 75,  "fr": "Gravalanch"},
+    {"id": 76,  "fr": "Grolem"},
+    {"id": 77,  "fr": "Ponyta"},
+    {"id": 78,  "fr": "Galopa"},
+    {"id": 79,  "fr": "Ramoloss"},
+    {"id": 80,  "fr": "Flagadoss"},
+    {"id": 81,  "fr": "Magnéti"},
+    {"id": 82,  "fr": "Magnéton"},
+    {"id": 83,  "fr": "Canarticho"},
+    {"id": 84,  "fr": "Doduo"},
+    {"id": 85,  "fr": "Dodrio"},
+    {"id": 86,  "fr": "Otaria"},
+    {"id": 87,  "fr": "Lamantine"},
+    {"id": 88,  "fr": "Tadmorv"},
+    {"id": 89,  "fr": "Grotadmorv"},
+    {"id": 90,  "fr": "Kokiyas"},
+    {"id": 91,  "fr": "Crustabri"},
+    {"id": 92,  "fr": "Fantominus"},
+    {"id": 93,  "fr": "Spectrum"},
+    {"id": 94,  "fr": "Ectoplasma"},
+    {"id": 95,  "fr": "Onix"},
+    {"id": 96,  "fr": "Soporifik"},
+    {"id": 97,  "fr": "Hypnomade"},
+    {"id": 98,  "fr": "Krabby"},
+    {"id": 99,  "fr": "Krabboss"},
     {"id": 100, "fr": "Voltorbe"},
-    {"id": 101, "fr": "Électrode"},
+    {"id": 101, "fr": "Electrode"},
     {"id": 102, "fr": "Nœunœuf"},
     {"id": 103, "fr": "Noadkoko"},
     {"id": 104, "fr": "Osselait"},
@@ -1962,12 +1549,12 @@ POKEMON_LIST = [
     {"id": 112, "fr": "Rhinoféros"},
     {"id": 113, "fr": "Leveinard"},
     {"id": 114, "fr": "Saquedeneu"},
-    {"id": 115, "fr": "Kangourex"},
+    {"id": 115, "fr": "Kangaskhan"},
     {"id": 116, "fr": "Hypotrempe"},
     {"id": 117, "fr": "Hypocéan"},
     {"id": 118, "fr": "Poissirène"},
     {"id": 119, "fr": "Poissoroy"},
-    {"id": 120, "fr": "Stari"},
+    {"id": 120, "fr": "Astéroïde"},
     {"id": 121, "fr": "Staross"},
     {"id": 122, "fr": "M. Mime"},
     {"id": 123, "fr": "Insécateur"},
@@ -1999,7 +1586,6 @@ POKEMON_LIST = [
     {"id": 149, "fr": "Dracolosse"},
     {"id": 150, "fr": "Mewtwo"},
     {"id": 151, "fr": "Mew"},
-
     # ═══════════════════════════════════════
     # GEN 2 — Johto (152–251)
     # ═══════════════════════════════════════
@@ -2016,15 +1602,15 @@ POKEMON_LIST = [
     {"id": 162, "fr": "Fouinar"},
     {"id": 163, "fr": "Hoothoot"},
     {"id": 164, "fr": "Noarfang"},
-    {"id": 165, "fr": "Coxy"},
-    {"id": 166, "fr": "Coxyclaque"},
-    {"id": 167, "fr": "Mimigal"},
+    {"id": 165, "fr": "Ledyba"},
+    {"id": 166, "fr": "Ledian"},
+    {"id": 167, "fr": "Arachné"},
     {"id": 168, "fr": "Migalos"},
     {"id": 169, "fr": "Nostenfer"},
     {"id": 170, "fr": "Loupio"},
     {"id": 171, "fr": "Lanturn"},
     {"id": 172, "fr": "Pichu"},
-    {"id": 173, "fr": "Mélo"},
+    {"id": 173, "fr": "Toudoudou"},
     {"id": 174, "fr": "Toudoudou"},
     {"id": 175, "fr": "Togepi"},
     {"id": 176, "fr": "Togetic"},
@@ -2036,11 +1622,11 @@ POKEMON_LIST = [
     {"id": 182, "fr": "Joliflor"},
     {"id": 183, "fr": "Marill"},
     {"id": 184, "fr": "Azumarill"},
-    {"id": 185, "fr": "Simularbre"},
+    {"id": 185, "fr": "Boskidor"},
     {"id": 186, "fr": "Tarpaud"},
     {"id": 187, "fr": "Granivol"},
     {"id": 188, "fr": "Floravol"},
-    {"id": 189, "fr": "Cotovol"},
+    {"id": 189, "fr": "Jumpluff"},
     {"id": 190, "fr": "Capumain"},
     {"id": 191, "fr": "Tournegrin"},
     {"id": 192, "fr": "Héliatronc"},
@@ -2055,16 +1641,16 @@ POKEMON_LIST = [
     {"id": 201, "fr": "Zarbi"},
     {"id": 202, "fr": "Qulbutoké"},
     {"id": 203, "fr": "Girafarig"},
-    {"id": 204, "fr": "Pomdepik"},
-    {"id": 205, "fr": "Foretress"},
-    {"id": 206, "fr": "Insolourdo"},
+    {"id": 204, "fr": "Armulys"},
+    {"id": 205, "fr": "Forretress"},
+    {"id": 206, "fr": "Trompignon"},
     {"id": 207, "fr": "Scorplane"},
     {"id": 208, "fr": "Steelix"},
     {"id": 209, "fr": "Snubbull"},
     {"id": 210, "fr": "Granbull"},
     {"id": 211, "fr": "Qwilfish"},
     {"id": 212, "fr": "Cizayox"},
-    {"id": 213, "fr": "Caratroc"},
+    {"id": 213, "fr": "Shelder"},
     {"id": 214, "fr": "Scarhino"},
     {"id": 215, "fr": "Farfuret"},
     {"id": 216, "fr": "Teddiursa"},
@@ -2074,19 +1660,19 @@ POKEMON_LIST = [
     {"id": 220, "fr": "Marcacrin"},
     {"id": 221, "fr": "Cochignon"},
     {"id": 222, "fr": "Corayon"},
-    {"id": 223, "fr": "Rémoraid"},
+    {"id": 223, "fr": "Remoraid"},
     {"id": 224, "fr": "Octillery"},
     {"id": 225, "fr": "Cadoizo"},
     {"id": 226, "fr": "Démanta"},
     {"id": 227, "fr": "Airmure"},
     {"id": 228, "fr": "Malosse"},
     {"id": 229, "fr": "Démolosse"},
-    {"id": 230, "fr": "Hyporoi"},
+    {"id": 230, "fr": "Kingdra"},
     {"id": 231, "fr": "Phanpy"},
     {"id": 232, "fr": "Donphan"},
     {"id": 233, "fr": "Porygon2"},
     {"id": 234, "fr": "Cerfrousse"},
-    {"id": 235, "fr": "Queulorior"},
+    {"id": 235, "fr": "Croupion"},
     {"id": 236, "fr": "Debugant"},
     {"id": 237, "fr": "Kapoera"},
     {"id": 238, "fr": "Lippouti"},
@@ -2097,13 +1683,12 @@ POKEMON_LIST = [
     {"id": 243, "fr": "Raikou"},
     {"id": 244, "fr": "Entei"},
     {"id": 245, "fr": "Suicune"},
-    {"id": 246, "fr": "Embrylex"},
-    {"id": 247, "fr": "Ymphect"},
+    {"id": 246, "fr": "Larvitar"},
+    {"id": 247, "fr": "Pupilax"},
     {"id": 248, "fr": "Tyranocif"},
     {"id": 249, "fr": "Lugia"},
     {"id": 250, "fr": "Ho-Oh"},
     {"id": 251, "fr": "Celebi"},
-
     # ═══════════════════════════════════════
     # GEN 3 — Hoenn (252–386)
     # ═══════════════════════════════════════
@@ -2116,41 +1701,41 @@ POKEMON_LIST = [
     {"id": 258, "fr": "Gobou"},
     {"id": 259, "fr": "Flobio"},
     {"id": 260, "fr": "Laggron"},
-    {"id": 261, "fr": "Medhyèna"},
-    {"id": 262, "fr": "Grahyèna"},
-    {"id": 263, "fr": "Zigzaton"},
-    {"id": 264, "fr": "Linéon"},
-    {"id": 265, "fr": "Chenipotte"},
-    {"id": 266, "fr": "Armulys"},
+    {"id": 261, "fr": "Zigzaton"},
+    {"id": 262, "fr": "Mangriff"},
+    {"id": 263, "fr": "Linoone"},
+    {"id": 264, "fr": "Cheniti"},
+    {"id": 265, "fr": "Blindobou"},
+    {"id": 266, "fr": "Chrysallid"},
     {"id": 267, "fr": "Charmillon"},
-    {"id": 268, "fr": "Blindalys"},
+    {"id": 268, "fr": "Blindilex"},
     {"id": 269, "fr": "Papinox"},
     {"id": 270, "fr": "Nénupiot"},
     {"id": 271, "fr": "Lombre"},
     {"id": 272, "fr": "Ludicolo"},
-    {"id": 273, "fr": "Grainipiot"},
+    {"id": 273, "fr": "Grainipic"},
     {"id": 274, "fr": "Pifeuil"},
     {"id": 275, "fr": "Tengalice"},
     {"id": 276, "fr": "Nirondelle"},
-    {"id": 277, "fr": "Hélédelle"},
+    {"id": 277, "fr": "Pikpik"},
     {"id": 278, "fr": "Goélise"},
-    {"id": 279, "fr": "Bekipan"},
+    {"id": 279, "fr": "Lakmécygne"},
     {"id": 280, "fr": "Tarsal"},
     {"id": 281, "fr": "Kirlia"},
     {"id": 282, "fr": "Gardevoir"},
     {"id": 283, "fr": "Arakdo"},
-    {"id": 284, "fr": "Maskadra"},
-    {"id": 285, "fr": "Balignon"},
-    {"id": 286, "fr": "Chapignon"},
+    {"id": 284, "fr": "Arraigno"},
+    {"id": 285, "fr": "Gratifeuil"},
+    {"id": 286, "fr": "Goinfrex"},
     {"id": 287, "fr": "Parecool"},
     {"id": 288, "fr": "Vigoroth"},
-    {"id": 289, "fr": "Monaflèmit"},
+    {"id": 289, "fr": "Flemindra"},
     {"id": 290, "fr": "Ningale"},
     {"id": 291, "fr": "Ninjask"},
     {"id": 292, "fr": "Munja"},
-    {"id": 293, "fr": "Chuchmur"},
-    {"id": 294, "fr": "Ramboum"},
-    {"id": 295, "fr": "Brouhabam"},
+    {"id": 293, "fr": "Houat"},
+    {"id": 294, "fr": "Loudred"},
+    {"id": 295, "fr": "Exploud"},
     {"id": 296, "fr": "Makuhita"},
     {"id": 297, "fr": "Hariyama"},
     {"id": 298, "fr": "Azurill"},
@@ -2164,14 +1749,14 @@ POKEMON_LIST = [
     {"id": 306, "fr": "Galeking"},
     {"id": 307, "fr": "Méditikka"},
     {"id": 308, "fr": "Médicharme"},
-    {"id": 309, "fr": "Dynavolt"},
+    {"id": 309, "fr": "Voltoutou"},
     {"id": 310, "fr": "Élecsprint"},
     {"id": 311, "fr": "Posipi"},
     {"id": 312, "fr": "Négapi"},
     {"id": 313, "fr": "Muciole"},
     {"id": 314, "fr": "Lumivole"},
     {"id": 315, "fr": "Rosélia"},
-    {"id": 316, "fr": "Gloupti"},
+    {"id": 316, "fr": "Glouton"},
     {"id": 317, "fr": "Avaltout"},
     {"id": 318, "fr": "Carvanha"},
     {"id": 319, "fr": "Sharpedo"},
@@ -2179,59 +1764,59 @@ POKEMON_LIST = [
     {"id": 321, "fr": "Wailord"},
     {"id": 322, "fr": "Chamallot"},
     {"id": 323, "fr": "Camérupt"},
-    {"id": 324, "fr": "Chartor"},
+    {"id": 324, "fr": "Torkoal"},
     {"id": 325, "fr": "Spoink"},
     {"id": 326, "fr": "Groret"},
     {"id": 327, "fr": "Spinda"},
-    {"id": 328, "fr": "Kraknoix"},
-    {"id": 329, "fr": "Vibraninf"},
-    {"id": 330, "fr": "Libégon"},
+    {"id": 328, "fr": "Trapinch"},
+    {"id": 329, "fr": "Vibrava"},
+    {"id": 330, "fr": "Flygon"},
     {"id": 331, "fr": "Cacnea"},
     {"id": 332, "fr": "Cacturne"},
     {"id": 333, "fr": "Tylton"},
-    {"id": 334, "fr": "Altaria"},
-    {"id": 335, "fr": "Mangriff"},
+    {"id": 334, "fr": "Drataireau"},
+    {"id": 335, "fr": "Zangoose"},
     {"id": 336, "fr": "Séviper"},
-    {"id": 337, "fr": "Séléroc"},
-    {"id": 338, "fr": "Solaroc"},
-    {"id": 339, "fr": "Barloche"},
-    {"id": 340, "fr": "Barbicha"},
+    {"id": 337, "fr": "Luneroche"},
+    {"id": 338, "fr": "Solochi"},
+    {"id": 339, "fr": "Barbicha"},
+    {"id": 340, "fr": "Barpau"},
     {"id": 341, "fr": "Écrapince"},
     {"id": 342, "fr": "Colhomard"},
     {"id": 343, "fr": "Balbuto"},
     {"id": 344, "fr": "Kaorine"},
     {"id": 345, "fr": "Lilia"},
-    {"id": 346, "fr": "Vacilys"},
+    {"id": 346, "fr": "Milobellus"},
     {"id": 347, "fr": "Anorith"},
     {"id": 348, "fr": "Armaldo"},
-    {"id": 349, "fr": "Barpau"},
+    {"id": 349, "fr": "Babimanta"},
     {"id": 350, "fr": "Milobellus"},
     {"id": 351, "fr": "Morphéo"},
     {"id": 352, "fr": "Kecleon"},
     {"id": 353, "fr": "Polichombr"},
-    {"id": 354, "fr": "Branette"},
-    {"id": 355, "fr": "Skelénox"},
+    {"id": 354, "fr": "Branchifix"},
+    {"id": 355, "fr": "Sképhan"},
     {"id": 356, "fr": "Téraclope"},
     {"id": 357, "fr": "Tropius"},
-    {"id": 358, "fr": "Éoko"},
+    {"id": 358, "fr": "Sonantor"},
     {"id": 359, "fr": "Absol"},
-    {"id": 360, "fr": "Okéoké"},
+    {"id": 360, "fr": "Négapi"},
     {"id": 361, "fr": "Stalgamin"},
     {"id": 362, "fr": "Oniglali"},
     {"id": 363, "fr": "Obalie"},
     {"id": 364, "fr": "Phogleur"},
-    {"id": 365, "fr": "Kaimorse"},
+    {"id": 365, "fr": "Mammochon"},
     {"id": 366, "fr": "Coquiperl"},
-    {"id": 367, "fr": "Serpang"},
-    {"id": 368, "fr": "Rosabyss"},
+    {"id": 367, "fr": "Chassagnol"},
+    {"id": 368, "fr": "Jolinaïa"},
     {"id": 369, "fr": "Relicanth"},
     {"id": 370, "fr": "Lovdisc"},
     {"id": 371, "fr": "Draby"},
     {"id": 372, "fr": "Drackhaus"},
     {"id": 373, "fr": "Drattak"},
-    {"id": 374, "fr": "Terhal"},
+    {"id": 374, "fr": "Métang"},
     {"id": 375, "fr": "Métang"},
-    {"id": 376, "fr": "Métalosse"},
+    {"id": 376, "fr": "Métallosse"},
     {"id": 377, "fr": "Regirock"},
     {"id": 378, "fr": "Regice"},
     {"id": 379, "fr": "Registeel"},
@@ -2246,20 +1831,20 @@ POKEMON_LIST = [
     # GEN 4 — Sinnoh (387–493)
     # ═══════════════════════════════════════
     {"id": 387, "fr": "Tortipouss"},
-    {"id": 388, "fr": "Boskara"},
+    {"id": 388, "fr": "Torterreur"},
     {"id": 389, "fr": "Torterra"},
     {"id": 390, "fr": "Ouisticram"},
     {"id": 391, "fr": "Chimpenfeu"},
     {"id": 392, "fr": "Simiabraz"},
     {"id": 393, "fr": "Tiplouf"},
     {"id": 394, "fr": "Prinplouf"},
-    {"id": 395, "fr": "Pingoléon"},
+    {"id": 395, "fr": "Empleo"},
     {"id": 396, "fr": "Étourmi"},
     {"id": 397, "fr": "Étourvol"},
     {"id": 398, "fr": "Étouraptor"},
-    {"id": 399, "fr": "Keunotor"},
-    {"id": 400, "fr": "Castorno"},
-    {"id": 401, "fr": "Crikzik"},
+    {"id": 399, "fr": "Rozbouton"},
+    {"id": 400, "fr": "Bibarel"},
+    {"id": 401, "fr": "Cricoté"},
     {"id": 402, "fr": "Mélokrik"},
     {"id": 403, "fr": "Lixy"},
     {"id": 404, "fr": "Luxio"},
@@ -2267,43 +1852,43 @@ POKEMON_LIST = [
     {"id": 406, "fr": "Rozbouton"},
     {"id": 407, "fr": "Roserade"},
     {"id": 408, "fr": "Kranidos"},
-    {"id": 409, "fr": "Charkos"},
+    {"id": 409, "fr": "Rampardos"},
     {"id": 410, "fr": "Dinoclier"},
     {"id": 411, "fr": "Bastiodon"},
     {"id": 412, "fr": "Cheniti"},
-    {"id": 413, "fr": "Cheniselle"},
-    {"id": 414, "fr": "Papilord"},
+    {"id": 413, "fr": "Papilord"},
+    {"id": 414, "fr": "Papinox"},
     {"id": 415, "fr": "Apitrini"},
     {"id": 416, "fr": "Apireine"},
     {"id": 417, "fr": "Pachirisu"},
     {"id": 418, "fr": "Mustébouée"},
     {"id": 419, "fr": "Mustéflott"},
-    {"id": 420, "fr": "Ceribou"},
-    {"id": 421, "fr": "Ceriflor"},
-    {"id": 422, "fr": "Sancoki"},
-    {"id": 423, "fr": "Tritosor"},
-    {"id": 424, "fr": "Capidextre"},
+    {"id": 420, "fr": "Ceristin"},
+    {"id": 421, "fr": "Cerifrains"},
+    {"id": 422, "fr": "Sanchos"},
+    {"id": 423, "fr": "Gastrodon"},
+    {"id": 424, "fr": "Ambipom"},
     {"id": 425, "fr": "Baudrive"},
-    {"id": 426, "fr": "Grodrive"},
-    {"id": 427, "fr": "Laporeille"},
+    {"id": 426, "fr": "Driftblim"},
+    {"id": 427, "fr": "Chétiaureau"},
     {"id": 428, "fr": "Lockpin"},
-    {"id": 429, "fr": "Magirêve"},
+    {"id": 429, "fr": "Mistigrix"},
     {"id": 430, "fr": "Corboss"},
     {"id": 431, "fr": "Chaglam"},
-    {"id": 432, "fr": "Chaffreux"},
-    {"id": 433, "fr": "Korillon"},
-    {"id": 434, "fr": "Moufouette"},
+    {"id": 432, "fr": "Crogank"},
+    {"id": 433, "fr": "Tintignol"},
+    {"id": 434, "fr": "Moufouine"},
     {"id": 435, "fr": "Moufflair"},
-    {"id": 436, "fr": "Archéomire"},
-    {"id": 437, "fr": "Archéodong"},
-    {"id": 438, "fr": "Manzaï"},
-    {"id": 439, "fr": "Mime Jr."},
-    {"id": 440, "fr": "Ptiravi"},
-    {"id": 441, "fr": "Pijako"},
+    {"id": 436, "fr": "Léboulet"},
+    {"id": 437, "fr": "Lugulabre"},
+    {"id": 438, "fr": "Bonsaïd"},
+    {"id": 439, "fr": "Mimigma"},
+    {"id": 440, "fr": "Cœurisson"},
+    {"id": 441, "fr": "Bruitapic"},
     {"id": 442, "fr": "Spiritomb"},
     {"id": 443, "fr": "Griknot"},
-    {"id": 444, "fr": "Carmache"},
-    {"id": 445, "fr": "Carchacrok"},
+    {"id": 444, "fr": "Gabite"},
+    {"id": 445, "fr": "Garchompe"},
     {"id": 446, "fr": "Goinfrex"},
     {"id": 447, "fr": "Riolu"},
     {"id": 448, "fr": "Lucario"},
@@ -2311,21 +1896,21 @@ POKEMON_LIST = [
     {"id": 450, "fr": "Hippodocus"},
     {"id": 451, "fr": "Rapion"},
     {"id": 452, "fr": "Drascore"},
-    {"id": 453, "fr": "Cradopaud"},
-    {"id": 454, "fr": "Coatox"},
-    {"id": 455, "fr": "Vortente"},
-    {"id": 456, "fr": "Écayon"},
-    {"id": 457, "fr": "Luminéon"},
-    {"id": 458, "fr": "Babimanta"},
+    {"id": 453, "fr": "Croâporal"},
+    {"id": 454, "fr": "Croâkitect"},
+    {"id": 455, "fr": "Culagriffe"},
+    {"id": 456, "fr": "Finnéon"},
+    {"id": 457, "fr": "Lumin'éon"},
+    {"id": 458, "fr": "Bébécaille"},
     {"id": 459, "fr": "Blizzi"},
-    {"id": 460, "fr": "Blizzaroi"},
-    {"id": 461, "fr": "Dimoret"},
+    {"id": 460, "fr": "Momartik"},
+    {"id": 461, "fr": "Weavile"},
     {"id": 462, "fr": "Magnézone"},
     {"id": 463, "fr": "Coudlangue"},
     {"id": 464, "fr": "Rhinastoc"},
-    {"id": 465, "fr": "Bouldeneu"},
-    {"id": 466, "fr": "Élekable"},
-    {"id": 467, "fr": "Maganon"},
+    {"id": 465, "fr": "Graligende"},
+    {"id": 466, "fr": "Électivire"},
+    {"id": 467, "fr": "Magmortar"},
     {"id": 468, "fr": "Togekiss"},
     {"id": 469, "fr": "Yanmega"},
     {"id": 470, "fr": "Phyllali"},
@@ -2333,14 +1918,14 @@ POKEMON_LIST = [
     {"id": 472, "fr": "Scorvol"},
     {"id": 473, "fr": "Mammochon"},
     {"id": 474, "fr": "Porygon-Z"},
-    {"id": 475, "fr": "Gallame"},
-    {"id": 476, "fr": "Tarinorme"},
-    {"id": 477, "fr": "Noctunoir"},
-    {"id": 478, "fr": "Momartik"},
+    {"id": 475, "fr": "Gaillardin"},
+    {"id": 476, "fr": "Bogueriste"},
+    {"id": 477, "fr": "Mamenbobo"},
+    {"id": 478, "fr": "Givrali"},
     {"id": 479, "fr": "Motisma"},
-    {"id": 480, "fr": "Créhelf"},
-    {"id": 481, "fr": "Créfollet"},
-    {"id": 482, "fr": "Créfadet"},
+    {"id": 480, "fr": "Créfadet"},
+    {"id": 481, "fr": "Mesprit"},
+    {"id": 482, "fr": "Azelf"},
     {"id": 483, "fr": "Dialga"},
     {"id": 484, "fr": "Palkia"},
     {"id": 485, "fr": "Heatran"},
@@ -2352,7 +1937,6 @@ POKEMON_LIST = [
     {"id": 491, "fr": "Darkrai"},
     {"id": 492, "fr": "Shaymin"},
     {"id": 493, "fr": "Arceus"},
-
     # ═══════════════════════════════════════
     # GEN 5 — Unys (494–649)
     # ═══════════════════════════════════════
@@ -2361,227 +1945,226 @@ POKEMON_LIST = [
     {"id": 496, "fr": "Lianaja"},
     {"id": 497, "fr": "Majaspic"},
     {"id": 498, "fr": "Gruikui"},
-    {"id": 499, "fr": "Grotichon"},
-    {"id": 500, "fr": "Roitiflam"},
+    {"id": 499, "fr": "Grotruire"},
+    {"id": 500, "fr": "Flamajou"},
     {"id": 501, "fr": "Moustillon"},
     {"id": 502, "fr": "Mateloutre"},
-    {"id": 503, "fr": "Clamiral"},
-    {"id": 504, "fr": "Ratentif"},
-    {"id": 505, "fr": "Miradar"},
+    {"id": 503, "fr": "Dégouleon"},
+    {"id": 504, "fr": "Muchirat"},
+    {"id": 505, "fr": "Basavoir"},
     {"id": 506, "fr": "Ponchiot"},
-    {"id": 507, "fr": "Ponchien"},
+    {"id": 507, "fr": "Léoption"},
     {"id": 508, "fr": "Mastouffe"},
-    {"id": 509, "fr": "Chacripan"},
-    {"id": 510, "fr": "Léopardus"},
-    {"id": 511, "fr": "Feuillajou"},
-    {"id": 512, "fr": "Feuiloutan"},
-    {"id": 513, "fr": "Flamajou"},
-    {"id": 514, "fr": "Flamoutan"},
-    {"id": 515, "fr": "Flotajou"},
-    {"id": 516, "fr": "Flotoutan"},
+    {"id": 509, "fr": "Fourbelin"},
+    {"id": 510, "fr": "Mancifu"},
+    {"id": 511, "fr": "Pansage"},
+    {"id": 512, "fr": "Feuillajou"},
+    {"id": 513, "fr": "Pansear"},
+    {"id": 514, "fr": "Flamajou"},
+    {"id": 515, "fr": "Panpour"},
+    {"id": 516, "fr": "Lézargus"},
     {"id": 517, "fr": "Munna"},
-    {"id": 518, "fr": "Mushana"},
+    {"id": 518, "fr": "Musharna"},
     {"id": 519, "fr": "Poichigeon"},
     {"id": 520, "fr": "Colombeau"},
-    {"id": 521, "fr": "Déflaisan"},
+    {"id": 521, "fr": "Fédératout"},
     {"id": 522, "fr": "Zébibron"},
-    {"id": 523, "fr": "Zéblitz"},
-    {"id": 524, "fr": "Nodulithe"},
-    {"id": 525, "fr": "Géolithe"},
+    {"id": 523, "fr": "Zébrargot"},
+    {"id": 524, "fr": "Géolithe"},
+    {"id": 525, "fr": "Géocatac"},
     {"id": 526, "fr": "Gigalithe"},
-    {"id": 527, "fr": "Chovsourir"},
-    {"id": 528, "fr": "Rhinolove"},
-    {"id": 529, "fr": "Rototaupe"},
-    {"id": 530, "fr": "Minotaupe"},
-    {"id": 531, "fr": "Nanméouïe"},
-    {"id": 532, "fr": "Charpenti"},
-    {"id": 533, "fr": "Ouvrifier"},
-    {"id": 534, "fr": "Bétochef"},
-    {"id": 535, "fr": "Tritonde"},
-    {"id": 536, "fr": "Batracné"},
-    {"id": 537, "fr": "Crapustule"},
-    {"id": 538, "fr": "Judokrak"},
-    {"id": 539, "fr": "Karaclée"},
+    {"id": 527, "fr": "Chovsouris"},
+    {"id": 528, "fr": "Aéronef"},
+    {"id": 529, "fr": "Fouinette"},
+    {"id": 530, "fr": "Excadrill"},
+    {"id": 531, "fr": "Audino"},
+    {"id": 532, "fr": "Timibour"},
+    {"id": 533, "fr": "Taillefert"},
+    {"id": 534, "fr": "Trioxhydre"},
+    {"id": 535, "fr": "Crotaquin"},
+    {"id": 536, "fr": "Coudlangue"},
+    {"id": 537, "fr": "Couverdure"},
+    {"id": 538, "fr": "Baggaïd"},
+    {"id": 539, "fr": "Cogiterre"},
     {"id": 540, "fr": "Larveyette"},
-    {"id": 541, "fr": "Couverdure"},
-    {"id": 542, "fr": "Manternel"},
-    {"id": 543, "fr": "Venipatte"},
+    {"id": 541, "fr": "Charboleon"},
+    {"id": 542, "fr": "Leavanny"},
+    {"id": 543, "fr": "Venipède"},
     {"id": 544, "fr": "Scobolide"},
-    {"id": 545, "fr": "Brutapode"},
-    {"id": 546, "fr": "Doudouvet"},
-    {"id": 547, "fr": "Farfaduvet"},
-    {"id": 548, "fr": "Chlorobule"},
-    {"id": 549, "fr": "Fragilady"},
+    {"id": 545, "fr": "Scolipède"},
+    {"id": 546, "fr": "Cotovol"},
+    {"id": 547, "fr": "Cottonée"},
+    {"id": 548, "fr": "Petilil"},
+    {"id": 549, "fr": "Lilligant"},
     {"id": 550, "fr": "Bargantua"},
     {"id": 551, "fr": "Mascaïman"},
-    {"id": 552, "fr": "Escroco"},
-    {"id": 553, "fr": "Crocorible"},
-    {"id": 554, "fr": "Darumarond"},
-    {"id": 555, "fr": "Darumacho"},
-    {"id": 556, "fr": "Maracachi"},
-    {"id": 557, "fr": "Crabicoque"},
+    {"id": 552, "fr": "Krokorok"},
+    {"id": 553, "fr": "Krookodil"},
+    {"id": 554, "fr": "Darumacho"},
+    {"id": 555, "fr": "Darmanitan"},
+    {"id": 556, "fr": "Maracasse"},
+    {"id": 557, "fr": "Larmiris"},
     {"id": 558, "fr": "Crabaraque"},
-    {"id": 559, "fr": "Baggiguane"},
-    {"id": 560, "fr": "Baggaïd"},
-    {"id": 561, "fr": "Cryptéro"},
+    {"id": 559, "fr": "Scraggy"},
+    {"id": 560, "fr": "Scrafty"},
+    {"id": 561, "fr": "Archéoveil"},
     {"id": 562, "fr": "Tutafeh"},
-    {"id": 563, "fr": "Tutankafer"},
-    {"id": 564, "fr": "Carapagos"},
-    {"id": 565, "fr": "Mégapagos"},
-    {"id": 566, "fr": "Arkéapti"},
+    {"id": 563, "fr": "Cofagrigus"},
+    {"id": 564, "fr": "Tirtouga"},
+    {"id": 565, "fr": "Carracosta"},
+    {"id": 566, "fr": "Archen"},
     {"id": 567, "fr": "Aéroptéryx"},
-    {"id": 568, "fr": "Miamiasme"},
+    {"id": 568, "fr": "Détrumite"},
     {"id": 569, "fr": "Miasmax"},
     {"id": 570, "fr": "Zorua"},
     {"id": 571, "fr": "Zoroark"},
-    {"id": 572, "fr": "Chinchidou"},
-    {"id": 573, "fr": "Pashmilla"},
-    {"id": 574, "fr": "Scrutella"},
-    {"id": 575, "fr": "Mesmérella"},
-    {"id": 576, "fr": "Sidérella"},
-    {"id": 577, "fr": "Nucléos"},
-    {"id": 578, "fr": "Méios"},
-    {"id": 579, "fr": "Symbios"},
+    {"id": 572, "fr": "Nounourson"},
+    {"id": 573, "fr": "Normalon"},
+    {"id": 574, "fr": "Gothita"},
+    {"id": 575, "fr": "Galineur"},
+    {"id": 576, "fr": "Galicristal"},
+    {"id": 577, "fr": "Duodécile"},
+    {"id": 578, "fr": "Réunofou"},
+    {"id": 579, "fr": "Réunofou"},
     {"id": 580, "fr": "Couaneton"},
-    {"id": 581, "fr": "Lakmécygne"},
-    {"id": 582, "fr": "Sorbébé"},
-    {"id": 583, "fr": "Sorboul"},
-    {"id": 584, "fr": "Sorbouboul"},
+    {"id": 581, "fr": "Cygnarete"},
+    {"id": 582, "fr": "Carabing"},
+    {"id": 583, "fr": "Cochignon"},
+    {"id": 584, "fr": "Escargaume"},
     {"id": 585, "fr": "Vivaldaim"},
-    {"id": 586, "fr": "Haydaim"},
+    {"id": 586, "fr": "Sawsbuck"},
     {"id": 587, "fr": "Emolga"},
     {"id": 588, "fr": "Carabing"},
-    {"id": 589, "fr": "Lançargot"},
+    {"id": 589, "fr": "Escargaume"},
     {"id": 590, "fr": "Trompignon"},
-    {"id": 591, "fr": "Gaulet"},
-    {"id": 592, "fr": "Viskuse"},
+    {"id": 591, "fr": "Chapignon"},
+    {"id": 592, "fr": "Froussardine"},
     {"id": 593, "fr": "Moyade"},
-    {"id": 594, "fr": "Mamanbo"},
+    {"id": 594, "fr": "Alomomola"},
     {"id": 595, "fr": "Statitik"},
     {"id": 596, "fr": "Mygavolt"},
-    {"id": 597, "fr": "Grindur"},
-    {"id": 598, "fr": "Noacier"},
-    {"id": 599, "fr": "Tic"},
-    {"id": 600, "fr": "Clic"},
-    {"id": 601, "fr": "Cliticlic"},
-    {"id": 602, "fr": "Anchwatt"},
-    {"id": 603, "fr": "Lampéroie"},
-    {"id": 604, "fr": "Ohmassacre"},
-    {"id": 605, "fr": "Lewsor"},
-    {"id": 606, "fr": "Neitram"},
-    {"id": 607, "fr": "Funécire"},
-    {"id": 608, "fr": "Mélancolux"},
+    {"id": 597, "fr": "Ferrogratt"},
+    {"id": 598, "fr": "Ferrothorn"},
+    {"id": 599, "fr": "Klink"},
+    {"id": 600, "fr": "Klang"},
+    {"id": 601, "fr": "Klinklang"},
+    {"id": 602, "fr": "Tynamo"},
+    {"id": 603, "fr": "Electrik"},
+    {"id": 604, "fr": "Electross"},
+    {"id": 605, "fr": "Embrylex"},
+    {"id": 606, "fr": "Mélancolux"},
+    {"id": 607, "fr": "Fumécryn"},
+    {"id": 608, "fr": "Hantascure"},
     {"id": 609, "fr": "Lugulabre"},
     {"id": 610, "fr": "Coupenotte"},
     {"id": 611, "fr": "Incisache"},
     {"id": 612, "fr": "Tranchodon"},
     {"id": 613, "fr": "Polarhume"},
-    {"id": 614, "fr": "Polagriffe"},
-    {"id": 615, "fr": "Hexagel"},
-    {"id": 616, "fr": "Escargaume"},
-    {"id": 617, "fr": "Limaspeed"},
+    {"id": 614, "fr": "Ursaking"},
+    {"id": 615, "fr": "Cryokrak"},
+    {"id": 616, "fr": "Cochignon"},
+    {"id": 617, "fr": "Escargaume"},
     {"id": 618, "fr": "Limonde"},
     {"id": 619, "fr": "Kungfouine"},
-    {"id": 620, "fr": "Shaofouine"},
+    {"id": 620, "fr": "Mustéfélin"},
     {"id": 621, "fr": "Drakkarmin"},
-    {"id": 622, "fr": "Gringolem"},
+    {"id": 622, "fr": "Golètre"},
     {"id": 623, "fr": "Golemastoc"},
-    {"id": 624, "fr": "Scalpion"},
-    {"id": 625, "fr": "Scalproie"},
-    {"id": 626, "fr": "Frison"},
-    {"id": 627, "fr": "Furaiglon"},
+    {"id": 624, "fr": "Tritaille"},
+    {"id": 625, "fr": "Trancheroc"},
+    {"id": 626, "fr": "Tampourine"},
+    {"id": 627, "fr": "Vélor"},
     {"id": 628, "fr": "Gueriaigle"},
     {"id": 629, "fr": "Vostourno"},
     {"id": 630, "fr": "Vaututrice"},
-    {"id": 631, "fr": "Aflamanoir"},
+    {"id": 631, "fr": "Flaigamie"},
     {"id": 632, "fr": "Fermite"},
-    {"id": 633, "fr": "Solochi"},
-    {"id": 634, "fr": "Diamat"},
+    {"id": 633, "fr": "Déino"},
+    {"id": 634, "fr": "Zweilous"},
     {"id": 635, "fr": "Trioxhydre"},
     {"id": 636, "fr": "Pyronille"},
     {"id": 637, "fr": "Pyrax"},
-    {"id": 638, "fr": "Cobaltium"},
+    {"id": 638, "fr": "Cobalion"},
     {"id": 639, "fr": "Terrakium"},
     {"id": 640, "fr": "Viridium"},
-    {"id": 641, "fr": "Boréas"},
+    {"id": 641, "fr": "Boreas"},
     {"id": 642, "fr": "Fulguris"},
     {"id": 643, "fr": "Reshiram"},
     {"id": 644, "fr": "Zekrom"},
     {"id": 645, "fr": "Démétéros"},
     {"id": 646, "fr": "Kyurem"},
     {"id": 647, "fr": "Keldeo"},
-    {"id": 648, "fr": "Meloetta"},
+    {"id": 648, "fr": "Méloëfc"},
     {"id": 649, "fr": "Genesect"},
-
     # ═══════════════════════════════════════
     # GEN 6 — Kalos (650–721)
     # ═══════════════════════════════════════
     {"id": 650, "fr": "Marisson"},
-    {"id": 651, "fr": "Boguérisse"},
+    {"id": 651, "fr": "Broquélard"},
     {"id": 652, "fr": "Blindépique"},
     {"id": 653, "fr": "Feunnec"},
     {"id": 654, "fr": "Roussil"},
     {"id": 655, "fr": "Goupelin"},
-    {"id": 656, "fr": "Grenousse"},
-    {"id": 657, "fr": "Croâporal"},
-    {"id": 658, "fr": "Amphinobi"},
+    {"id": 656, "fr": "Frondaim"},
+    {"id": 657, "fr": "Croâkitect"},
+    {"id": 658, "fr": "Greninja"},
     {"id": 659, "fr": "Sapereau"},
-    {"id": 660, "fr": "Excavarenne"},
+    {"id": 660, "fr": "Graby"},
     {"id": 661, "fr": "Passerouge"},
-    {"id": 662, "fr": "Braisillon"},
-    {"id": 663, "fr": "Flambusard"},
+    {"id": 662, "fr": "Embrochet"},
+    {"id": 663, "fr": "Talonflame"},
     {"id": 664, "fr": "Lépidonille"},
-    {"id": 665, "fr": "Pérégrain"},
-    {"id": 666, "fr": "Prismillon"},
+    {"id": 665, "fr": "Lépidonille"},
+    {"id": 666, "fr": "Vivillon"},
     {"id": 667, "fr": "Hélionceau"},
-    {"id": 668, "fr": "Némélios"},
+    {"id": 668, "fr": "Pyroar"},
     {"id": 669, "fr": "Couafarel"},
-    {"id": 670, "fr": "Flabébé"},
-    {"id": 671, "fr": "Floette"},
-    {"id": 672, "fr": "Florges"},
-    {"id": 673, "fr": "Cabriolaine"},
-    {"id": 674, "fr": "Chevroum"},
-    {"id": 675, "fr": "Pandespiègle"},
+    {"id": 670, "fr": "Floette"},
+    {"id": 671, "fr": "Florges"},
+    {"id": 672, "fr": "Cabriolaine"},
+    {"id": 673, "fr": "Gogoat"},
+    {"id": 674, "fr": "Farfadet"},
+    {"id": 675, "fr": "Pancham"},
     {"id": 676, "fr": "Pandarbare"},
-    {"id": 677, "fr": "Psytigri"},
-    {"id": 678, "fr": "Mistigrix"},
-    {"id": 679, "fr": "Monorpale"},
-    {"id": 680, "fr": "Dimoclès"},
-    {"id": 681, "fr": "Exagide"},
+    {"id": 677, "fr": "Espurr"},
+    {"id": 678, "fr": "Mérovin"},
+    {"id": 679, "fr": "Doublade"},
+    {"id": 680, "fr": "Doublade"},
+    {"id": 681, "fr": "Egiide"},
     {"id": 682, "fr": "Sucroquin"},
-    {"id": 683, "fr": "Cupcanaille"},
-    {"id": 684, "fr": "Fluvetin"},
-    {"id": 685, "fr": "Cocotine"},
+    {"id": 683, "fr": "Mukade"},
+    {"id": 684, "fr": "Parfaite"},
+    {"id": 685, "fr": "Aromatisse"},
     {"id": 686, "fr": "Sepiatop"},
-    {"id": 687, "fr": "Sepiatroce"},
-    {"id": 688, "fr": "Opermine"},
-    {"id": 689, "fr": "Golgopathe"},
-    {"id": 690, "fr": "Venalgue"},
-    {"id": 691, "fr": "Kravarech"},
-    {"id": 692, "fr": "Flingouste"},
+    {"id": 687, "fr": "Calamanero"},
+    {"id": 688, "fr": "Rocaufeu"},
+    {"id": 689, "fr": "Barbaracle"},
+    {"id": 690, "fr": "Kravarech"},
+    {"id": 691, "fr": "Dragalge"},
+    {"id": 692, "fr": "Crustabri"},
     {"id": 693, "fr": "Gamblast"},
-    {"id": 694, "fr": "Galvaran"},
-    {"id": 695, "fr": "Iguolta"},
-    {"id": 696, "fr": "Ptyranidur"},
-    {"id": 697, "fr": "Rexillius"},
+    {"id": 694, "fr": "Helioptile"},
+    {"id": 695, "fr": "Heliolisk"},
+    {"id": 696, "fr": "Tétaclope"},
+    {"id": 697, "fr": "Tyranocif"},
     {"id": 698, "fr": "Amagara"},
     {"id": 699, "fr": "Dragmara"},
     {"id": 700, "fr": "Nymphali"},
     {"id": 701, "fr": "Brutalibré"},
     {"id": 702, "fr": "Dedenne"},
-    {"id": 703, "fr": "Strassie"},
-    {"id": 704, "fr": "Mucuscule"},
+    {"id": 703, "fr": "Mineroc"},
+    {"id": 704, "fr": "Muplodocus"},
     {"id": 705, "fr": "Colimucus"},
-    {"id": 706, "fr": "Muplodocus"},
+    {"id": 706, "fr": "Mucuscule"},
     {"id": 707, "fr": "Trousselin"},
     {"id": 708, "fr": "Brocélôme"},
-    {"id": 709, "fr": "Desséliande"},
+    {"id": 709, "fr": "Phantasme"},
     {"id": 710, "fr": "Pitrouille"},
     {"id": 711, "fr": "Banshitrouye"},
-    {"id": 712, "fr": "Grelaçon"},
-    {"id": 713, "fr": "Séracrawl"},
-    {"id": 714, "fr": "Sonistrelle"},
-    {"id": 715, "fr": "Bruyverne"},
+    {"id": 712, "fr": "Polarhume"},
+    {"id": 713, "fr": "Sévalanche"},
+    {"id": 714, "fr": "Noibat"},
+    {"id": 715, "fr": "Noivern"},
     {"id": 716, "fr": "Xerneas"},
     {"id": 717, "fr": "Yveltal"},
     {"id": 718, "fr": "Zygarde"},
@@ -2592,317 +2175,237 @@ POKEMON_LIST = [
     # GEN 7 — Alola (722–809)
     # ═══════════════════════════════════════
     {"id": 722, "fr": "Brindibou"},
-    {"id": 723, "fr": "Efflèche"},
+    {"id": 723, "fr": "Effleche"},
     {"id": 724, "fr": "Archéduc"},
     {"id": 725, "fr": "Flamiaou"},
-    {"id": 726, "fr": "Matoufeu"},
+    {"id": 726, "fr": "Torracat"},
     {"id": 727, "fr": "Félinferno"},
     {"id": 728, "fr": "Otaquin"},
     {"id": 729, "fr": "Otarlette"},
-    {"id": 730, "fr": "Oratoria"},
+    {"id": 730, "fr": "Tokotoro"},
     {"id": 731, "fr": "Picassaut"},
-    {"id": 732, "fr": "Piclairon"},
-    {"id": 733, "fr": "Bazoucan"},
-    {"id": 734, "fr": "Manglouton"},
-    {"id": 735, "fr": "Argouste"},
-    {"id": 736, "fr": "Larvibule"},
-    {"id": 737, "fr": "Chrysapile"},
-    {"id": 738, "fr": "Lucanon"},
-    {"id": 739, "fr": "Crabagarre"},
-    {"id": 740, "fr": "Crabominable"},
-    {"id": 741, "fr": "Plumeline"},
-    {"id": 742, "fr": "Bombydou"},
+    {"id": 732, "fr": "Groursatche"},
+    {"id": 733, "fr": "Butérisson"},
+    {"id": 734, "fr": "Togedemaru"},
+    {"id": 735, "fr": "Brutal"},
+    {"id": 736, "fr": "Charjabug"},
+    {"id": 737, "fr": "Vikavolt"},
+    {"id": 738, "fr": "Crabagarre"},
+    {"id": 739, "fr": "Crabominable"},
+    {"id": 740, "fr": "Oricorio"},
+    {"id": 741, "fr": "Oricorio"},
+    {"id": 742, "fr": "Mimantis"},
     {"id": 743, "fr": "Rubombelle"},
     {"id": 744, "fr": "Rocabot"},
     {"id": 745, "fr": "Lougaroc"},
-    {"id": 746, "fr": "Froussardine"},
-    {"id": 747, "fr": "Vorastérie"},
-    {"id": 748, "fr": "Prédastérie"},
-    {"id": 749, "fr": "Tiboudet"},
-    {"id": 750, "fr": "Bourrinos"},
+    {"id": 746, "fr": "Wishiwashi"},
+    {"id": 747, "fr": "Toxapex"},
+    {"id": 748, "fr": "Tiboudet"},
+    {"id": 749, "fr": "Camptrousse"},
+    {"id": 750, "fr": "Araknyd"},
     {"id": 751, "fr": "Araqua"},
-    {"id": 752, "fr": "Tarenbulle"},
-    {"id": 753, "fr": "Mimantis"},
-    {"id": 754, "fr": "Floramantis"},
-    {"id": 755, "fr": "Spododo"},
-    {"id": 756, "fr": "Lampignon"},
-    {"id": 757, "fr": "Tritox"},
-    {"id": 758, "fr": "Malamandre"},
-    {"id": 759, "fr": "Nounourson"},
-    {"id": 760, "fr": "Chelours"},
-    {"id": 761, "fr": "Croquine"},
-    {"id": 762, "fr": "Candine"},
-    {"id": 763, "fr": "Sucreine"},
-    {"id": 764, "fr": "Guérilande"},
-    {"id": 765, "fr": "Gouroutan"},
-    {"id": 766, "fr": "Quartermac"},
-    {"id": 767, "fr": "Sovkipou"},
-    {"id": 768, "fr": "Sarmuraï"},
-    {"id": 769, "fr": "Bacabouh"},
-    {"id": 770, "fr": "Trépassable"},
-    {"id": 771, "fr": "Concombaffe"},
-    {"id": 772, "fr": "Type:0"},
-    {"id": 773, "fr": "Silvallié"},
-    {"id": 774, "fr": "Météno"},
-    {"id": 775, "fr": "Dodoala"},
-    {"id": 776, "fr": "Boumata"},
-    {"id": 777, "fr": "Togedemaru"},
-    {"id": 778, "fr": "Mimiqui"},
-    {"id": 779, "fr": "Denticrisse"},
-    {"id": 780, "fr": "Draïeul"},
-    {"id": 781, "fr": "Sinistrail"},
-    {"id": 782, "fr": "Bébécaille"},
-    {"id": 783, "fr": "Écaïd"},
-    {"id": 784, "fr": "Ékaïser"},
-    {"id": 785, "fr": "Tokorico"},
-    {"id": 786, "fr": "Tokopiyon"},
-    {"id": 787, "fr": "Tokotoro"},
-    {"id": 788, "fr": "Tokopisco"},
-    {"id": 789, "fr": "Cosmog"},
-    {"id": 790, "fr": "Cosmovum"},
-    {"id": 791, "fr": "Solgaleo"},
-    {"id": 792, "fr": "Lunala"},
-    {"id": 793, "fr": "Zéroïd"},
-    {"id": 794, "fr": "Mouscoto"},
-    {"id": 795, "fr": "Cancrelove"},
-    {"id": 796, "fr": "Câblifère"},
-    {"id": 797, "fr": "Bamboiselle"},
-    {"id": 798, "fr": "Katagami"},
-    {"id": 799, "fr": "Engloutyran"},
-    {"id": 800, "fr": "Necrozma"},
-    {"id": 801, "fr": "Magearna"},
-    {"id": 802, "fr": "Marshadow"},
-    {"id": 803, "fr": "Vémini"},
-    {"id": 804, "fr": "Mandrillon"},
-    {"id": 805, "fr": "Ama-Ama"},
-    {"id": 806, "fr": "Pierroteknik"},
-    {"id": 807, "fr": "Zeraora"},
-    {"id": 808, "fr": "Meltan"},
-    {"id": 809, "fr": "Melmetal"},
-
+    {"id": 752, "fr": "Fomantis"},
+    {"id": 753, "fr": "Floramantis"},
+    {"id": 754, "fr": "Lampignon"},
+    {"id": 755, "fr": "Vespibule"},
+    {"id": 756, "fr": "Salandit"},
+    {"id": 757, "fr": "Salazzle"},
+    {"id": 758, "fr": "Nounourson"},
+    {"id": 759, "fr": "Béheyem"},
+    {"id": 760, "fr": "Celosios"},
+    {"id": 761, "fr": "Stévia"},
+    {"id": 762, "fr": "Tsareena"},
+    {"id": 763, "fr": "Guérilande"},
+    {"id": 764, "fr": "Oranguru"},
+    {"id": 765, "fr": "Passimian"},
+    {"id": 766, "fr": "Nigosier"},
+    {"id": 767, "fr": "Golisopod"},
+    {"id": 768, "fr": "Sandyghast"},
+    {"id": 769, "fr": "Palossand"},
+    {"id": 770, "fr": "Pyukumuku"},
+    {"id": 771, "fr": "Type:Zéro"},
+    {"id": 772, "fr": "Silvallié"},
+    {"id": 773, "fr": "Météno"},
+    {"id": 774, "fr": "Moumouton"},
+    {"id": 775, "fr": "Turtonator"},
+    {"id": 776, "fr": "Togedemaru"},
+    {"id": 777, "fr": "Mimiqui"},
+    {"id": 778, "fr": "Bruxish"},
+    {"id": 779, "fr": "Drampa"},
+    {"id": 780, "fr": "Okhosi"},
+    {"id": 781, "fr": "Jangmo-o"},
+    {"id": 782, "fr": "Hakamo-o"},
+    {"id": 783, "fr": "Kommo-o"},
+    {"id": 784, "fr": "Tapu Koko"},
+    {"id": 785, "fr": "Tapu Lele"},
+    {"id": 786, "fr": "Tapu Bulu"},
+    {"id": 787, "fr": "Tapu Fini"},
+    {"id": 788, "fr": "Cosmog"},
+    {"id": 789, "fr": "Cosmoem"},
+    {"id": 790, "fr": "Solgaleo"},
+    {"id": 791, "fr": "Lunala"},
+    {"id": 792, "fr": "Nihilego"},
+    {"id": 793, "fr": "Buzzwole"},
+    {"id": 794, "fr": "Pheromosa"},
+    {"id": 795, "fr": "Xurkitree"},
+    {"id": 796, "fr": "Célestacier"},
+    {"id": 797, "fr": "Kartana"},
+    {"id": 798, "fr": "Guzzlord"},
+    {"id": 799, "fr": "Necrozma"},
+    {"id": 800, "fr": "Magearna"},
+    {"id": 801, "fr": "Marshadow"},
+    {"id": 802, "fr": "Poipole"},
+    {"id": 803, "fr": "Naganadel"},
+    {"id": 804, "fr": "Stakataka"},
+    {"id": 805, "fr": "Blacephalon"},
+    {"id": 806, "fr": "Zeraora"},
+    {"id": 807, "fr": "Meltan"},
+    {"id": 808, "fr": "Melmetal"},
     # ═══════════════════════════════════════
     # GEN 8 — Galar & Hisui (810–905)
     # ═══════════════════════════════════════
     {"id": 810, "fr": "Ouistempo"},
-    {"id": 811, "fr": "Badabouin"},
+    {"id": 811, "fr": "Badabing"},
     {"id": 812, "fr": "Gorythmic"},
     {"id": 813, "fr": "Flambino"},
-    {"id": 814, "fr": "Lapyro"},
-    {"id": 815, "fr": "Pyrobut"},
+    {"id": 814, "fr": "Borzner"},
+    {"id": 815, "fr": "Srinox"},
     {"id": 816, "fr": "Larméléon"},
-    {"id": 817, "fr": "Arrozard"},
-    {"id": 818, "fr": "Lézargus"},
-    {"id": 819, "fr": "Rongourmand"},
-    {"id": 820, "fr": "Rongrigou"},
-    {"id": 821, "fr": "Minisange"},
-    {"id": 822, "fr": "Bleuseille"},
-    {"id": 823, "fr": "Corvaillus"},
-    {"id": 824, "fr": "Larvadar"},
-    {"id": 825, "fr": "Coléodôme"},
-    {"id": 826, "fr": "Astronelle"},
-    {"id": 827, "fr": "Goupilou"},
-    {"id": 828, "fr": "Roublenard"},
-    {"id": 829, "fr": "Tournicoton"},
-    {"id": 830, "fr": "Blancoton"},
-    {"id": 831, "fr": "Moumouton"},
-    {"id": 832, "fr": "Moumouflon"},
-    {"id": 833, "fr": "Khélocrok"},
-    {"id": 834, "fr": "Torgamord"},
-    {"id": 835, "fr": "Voltoutou"},
-    {"id": 836, "fr": "Fulgudog"},
-    {"id": 837, "fr": "Charbi"},
-    {"id": 838, "fr": "Wagomine"},
-    {"id": 839, "fr": "Monthracite"},
-    {"id": 840, "fr": "Verpom"},
-    {"id": 841, "fr": "Pomdrapi"},
-    {"id": 842, "fr": "Dratatin"},
-    {"id": 843, "fr": "Dunaja"},
-    {"id": 844, "fr": "Dunaconda"},
-    {"id": 845, "fr": "Nigosier"},
-    {"id": 846, "fr": "Embrochet"},
-    {"id": 847, "fr": "Hastacuda"},
-    {"id": 848, "fr": "Toxizap"},
-    {"id": 849, "fr": "Salarsen"},
-    {"id": 850, "fr": "Grillepattes"},
-    {"id": 851, "fr": "Scolocendre"},
-    {"id": 852, "fr": "Poulpaf"},
-    {"id": 853, "fr": "Krakos"},
-    {"id": 854, "fr": "Théffroi"},
-    {"id": 855, "fr": "Polthégeist"},
-    {"id": 856, "fr": "Bibichut"},
-    {"id": 857, "fr": "Chapotus"},
-    {"id": 858, "fr": "Sorcilence"},
-    {"id": 859, "fr": "Grimalin"},
-    {"id": 860, "fr": "Fourbelin"},
-    {"id": 861, "fr": "Angoliath"},
-    {"id": 862, "fr": "Ixon"},
-    {"id": 863, "fr": "Berserkatt"},
-    {"id": 864, "fr": "Corayôme"},
-    {"id": 865, "fr": "Palarticho"},
-    {"id": 866, "fr": "M. Glaquette"},
-    {"id": 867, "fr": "Tutétékri"},
-    {"id": 868, "fr": "Crèmy"},
-    {"id": 869, "fr": "Charmilly"},
-    {"id": 870, "fr": "Hexadron"},
-    {"id": 871, "fr": "Wattapik"},
-    {"id": 872, "fr": "Frissonille"},
-    {"id": 873, "fr": "Beldeneige"},
-    {"id": 874, "fr": "Dolman"},
-    {"id": 875, "fr": "Bekaglaçon"},
-    {"id": 876, "fr": "Wimessir"},
-    {"id": 877, "fr": "Morpeko"},
-    {"id": 878, "fr": "Charibari"},
-    {"id": 879, "fr": "Pachyradjah"},
-    {"id": 880, "fr": "Galvagon"},
-    {"id": 881, "fr": "Galvagla"},
-    {"id": 882, "fr": "Hydragon"},
-    {"id": 883, "fr": "Hydragla"},
-    {"id": 884, "fr": "Duralugon"},
-    {"id": 885, "fr": "Fantyrm"},
-    {"id": 886, "fr": "Dispareptil"},
-    {"id": 887, "fr": "Lanssorien"},
-    {"id": 888, "fr": "Zacian"},
-    {"id": 889, "fr": "Zamazenta"},
-    {"id": 890, "fr": "Éthernatos"},
-    {"id": 891, "fr": "Wushours"},
-    {"id": 892, "fr": "Shifours"},
-    {"id": 893, "fr": "Zarude"},
-    {"id": 894, "fr": "Regieleki"},
-    {"id": 895, "fr": "Regidrago"},
-    {"id": 896, "fr": "Blizzeval"},
-    {"id": 897, "fr": "Spectreval"},
-    {"id": 898, "fr": "Sylveroy"},
-    {"id": 899, "fr": "Cerbyllin"},
-    {"id": 900, "fr": "Hachecateur"},
-    {"id": 901, "fr": "Ursaking"},
-    {"id": 902, "fr": "Paragruel"},
-    {"id": 903, "fr": "Farfurex"},
-    {"id": 904, "fr": "Qwilpik"},
-    {"id": 905, "fr": "Amovénus"},
-
+    {"id": 817, "fr": "Pharyngite"},
+    {"id": 818, "fr": "Moyade"},
+    {"id": 819, "fr": "Grogleur"},
+    {"id": 820, "fr": "Argouste"},
+    {"id": 821, "fr": "Corvisquire"},
+    {"id": 822, "fr": "Corviknight"},
+    {"id": 823, "fr": "Lilliputt"},
+    {"id": 824, "fr": "Chapeaupiaf"},
+    {"id": 825, "fr": "Chapoteur"},
+    {"id": 826, "fr": "Orforgon"},
+    {"id": 827, "fr": "Grimaloir"},
+    {"id": 828, "fr": "Salaïbe"},
+    {"id": 829, "fr": "Obkeks"},
+    {"id": 830, "fr": "Croquine"},
+    {"id": 831, "fr": "Clobessin"},
+    {"id": 832, "fr": "Tonnegerre"},
+    {"id": 833, "fr": "Boltecoton"},
+    {"id": 834, "fr": "Rolycoly"},
+    {"id": 835, "fr": "Carkoal"},
+    {"id": 836, "fr": "Coalossal"},
+    {"id": 837, "fr": "Gromago"},
+    {"id": 838, "fr": "Pomdrapi"},
+    {"id": 839, "fr": "Appletun"},
+    {"id": 840, "fr": "Silicobra"},
+    {"id": 841, "fr": "Sandaconda"},
+    {"id": 842, "fr": "Cramorant"},
+    {"id": 843, "fr": "Arrokuda"},
+    {"id": 844, "fr": "Barrikadoss"},
+    {"id": 845, "fr": "Toxel"},
+    {"id": 846, "fr": "Shuggérissime"},
+    {"id": 847, "fr": "Sizzlipede"},
+    {"id": 848, "fr": "Centiskorch"},
+    {"id": 849, "fr": "Clobbopus"},
+    {"id": 850, "fr": "Grapploct"},
+    {"id": 851, "fr": "Théffroi"},
+    {"id": 852, "fr": "Polthégeist"},
+    {"id": 853, "fr": "Milcéry"},
+    {"id": 854, "fr": "Alcremie"},
+    {"id": 855, "fr": "Falinks"},
+    {"id": 856, "fr": "Pincurchin"},
+    {"id": 857, "fr": "Frison"},
+    {"id": 858, "fr": "Frosmoth"},
+    {"id": 859, "fr": "Caillépique"},
+    {"id": 860, "fr": "Eihtpik"},
+    {"id": 861, "fr": "Charmina"},
+    {"id": 862, "fr": "Morpeko"},
+    {"id": 863, "fr": "Cufant"},
+    {"id": 864, "fr": "Elécindus"},
+    {"id": 865, "fr": "Dracozolt"},
+    {"id": 866, "fr": "Arctozolt"},
+    {"id": 867, "fr": "Dracovish"},
+    {"id": 868, "fr": "Arctovish"},
+    {"id": 869, "fr": "Duraludon"},
+    {"id": 870, "fr": "Dreepy"},
+    {"id": 871, "fr": "Drakloak"},
+    {"id": 872, "fr": "Dragapult"},
+    {"id": 873, "fr": "Zacian"},
+    {"id": 874, "fr": "Zamazenta"},
+    {"id": 875, "fr": "Eternatus"},
+    {"id": 876, "fr": "Kubfu"},
+    {"id": 877, "fr": "Urshifu"},
+    {"id": 878, "fr": "Zarude"},
+    {"id": 879, "fr": "Regieleki"},
+    {"id": 880, "fr": "Regidrago"},
+    {"id": 881, "fr": "Blizzeval"},
+    {"id": 882, "fr": "Spectrier"},
+    {"id": 883, "fr": "Sylveroy"},
     # ═══════════════════════════════════════
     # GEN 9 — Paldea (906–1025)
     # ═══════════════════════════════════════
-    {"id": 906, "fr": "Poussacha"},
-    {"id": 907, "fr": "Matourgeon"},
-    {"id": 908, "fr": "Miascarade"},
-    {"id": 909, "fr": "Chochodile"},
-    {"id": 910, "fr": "Crocogril"},
-    {"id": 911, "fr": "Flâmigator"},
-    {"id": 912, "fr": "Coiffeton"},
-    {"id": 913, "fr": "Canarbello"},
-    {"id": 914, "fr": "Palmaval"},
-    {"id": 915, "fr": "Gourmelet"},
-    {"id": 916, "fr": "Fragroin"},
-    {"id": 917, "fr": "Tissenboule"},
-    {"id": 918, "fr": "Filentrappe"},
-    {"id": 919, "fr": "Lilliterelle"},
-    {"id": 920, "fr": "Gambex"},
-    {"id": 921, "fr": "Pohm"},
-    {"id": 922, "fr": "Pohmotte"},
-    {"id": 923, "fr": "Pohmarmotte"},
-    {"id": 924, "fr": "Compagnol"},
-    {"id": 925, "fr": "Famignol"},
-    {"id": 926, "fr": "Pâtachiot"},
-    {"id": 927, "fr": "Briochien"},
-    {"id": 928, "fr": "Olivini"},
-    {"id": 929, "fr": "Olivado"},
-    {"id": 930, "fr": "Arboliva"},
-    {"id": 931, "fr": "Tapatoès"},
-    {"id": 932, "fr": "Selutin"},
-    {"id": 933, "fr": "Amassel"},
-    {"id": 934, "fr": "Gigansel"},
-    {"id": 935, "fr": "Charbambin"},
-    {"id": 936, "fr": "Carmadura"},
-    {"id": 937, "fr": "Malvalame"},
-    {"id": 938, "fr": "Têtampoule"},
-    {"id": 939, "fr": "Ampibidou"},
-    {"id": 940, "fr": "Zapétrel"},
-    {"id": 941, "fr": "Fulgulairo"},
-    {"id": 942, "fr": "Grondogue"},
-    {"id": 943, "fr": "Dogrino"},
-    {"id": 944, "fr": "Gribouraigne"},
-    {"id": 945, "fr": "Tag-Tag"},
-    {"id": 946, "fr": "Virovent"},
-    {"id": 947, "fr": "Virevorreur"},
-    {"id": 948, "fr": "Terracool"},
-    {"id": 949, "fr": "Terracruel"},
-    {"id": 950, "fr": "Craparoi"},
-    {"id": 951, "fr": "Pimito"},
-    {"id": 952, "fr": "Scovilain"},
-    {"id": 953, "fr": "Léboulérou"},
-    {"id": 954, "fr": "Bérasca"},
-    {"id": 955, "fr": "Flotillon"},
-    {"id": 956, "fr": "Cléopsytra"},
-    {"id": 957, "fr": "Forgerette"},
-    {"id": 958, "fr": "Forgella"},
-    {"id": 959, "fr": "Forgelina"},
-    {"id": 960, "fr": "Taupikeau"},
-    {"id": 961, "fr": "Triopikeau"},
-    {"id": 962, "fr": "Lestombaile"},
-    {"id": 963, "fr": "Dofin"},
-    {"id": 964, "fr": "Superdofin"},
-    {"id": 965, "fr": "Vrombi"},
-    {"id": 966, "fr": "Vrombotor"},
-    {"id": 967, "fr": "Motorizard"},
-    {"id": 968, "fr": "Ferdeter"},
-    {"id": 969, "fr": "Germéclat"},
-    {"id": 970, "fr": "Floréclat"},
-    {"id": 971, "fr": "Toutombe"},
-    {"id": 972, "fr": "Tomberro"},
-    {"id": 973, "fr": "Flamenroule"},
-    {"id": 974, "fr": "Piétacé"},
-    {"id": 975, "fr": "Balbalèze"},
-    {"id": 976, "fr": "Délestin"},
-    {"id": 977, "fr": "Oyacata"},
-    {"id": 978, "fr": "Nigirigon"},
-    {"id": 979, "fr": "Courrousinge"},
-    {"id": 980, "fr": "Terraiste"},
-    {"id": 981, "fr": "Farigiraf"},
-    {"id": 982, "fr": "Deusolourdo"},
-    {"id": 983, "fr": "Scalpereur"},
-    {"id": 984, "fr": "Fort-Ivoire"},
-    {"id": 985, "fr": "Hurle-Queue"},
-    {"id": 986, "fr": "Fongus-Furie"},
-    {"id": 987, "fr": "Flotte-Mèche"},
-    {"id": 988, "fr": "Rampes-Ailes"},
-    {"id": 989, "fr": "Pelage-Sablé"},
-    {"id": 990, "fr": "Roue-de-Fer"},
-    {"id": 991, "fr": "Hotte-de-Fer"},
-    {"id": 992, "fr": "Paume-de-Fer"},
-    {"id": 993, "fr": "Têtes-de-Fer"},
-    {"id": 994, "fr": "Mite-de-Fer"},
-    {"id": 995, "fr": "Épine-de-Fer"},
-    {"id": 996, "fr": "Frigodo"},
-    {"id": 997, "fr": "Cryodo"},
-    {"id": 998, "fr": "Glaivodo"},
-    {"id": 999, "fr": "Mordudor"},
-    {"id": 1000, "fr": "Gromago"},
-    {"id": 1001, "fr": "Chongjian"},
-    {"id": 1002, "fr": "Baojian"},
-    {"id": 1003, "fr": "Dinglu"},
-    {"id": 1004, "fr": "Yuyu"},
-    {"id": 1005, "fr": "Rugit-Lune"},
-    {"id": 1006, "fr": "Garde-de-Fer"},
-    {"id": 1007, "fr": "Koraidon"},
-    {"id": 1008, "fr": "Miraidon"},
-    {"id": 1009, "fr": "Serpente-Eau"},
-    {"id": 1010, "fr": "Vert-de-Fer"},
-    {"id": 1011, "fr": "Pomdramour"},
-    {"id": 1012, "fr": "Poltchageist"},
-    {"id": 1013, "fr": "Théffroyable"},
-    {"id": 1014, "fr": "Félicanis"},
-    {"id": 1015, "fr": "Fortusimia"},
-    {"id": 1016, "fr": "Favianos"},
-    {"id": 1017, "fr": "Ogerpon"},
-    {"id": 1018, "fr": "Pondralugon"},
-    {"id": 1019, "fr": "Pomdorochi"},
-    {"id": 1020, "fr": "Feu-Perçant"},
-    {"id": 1021, "fr": "Ire-Foudre"},
-    {"id": 1022, "fr": "Roc-de-Fer"},
-    {"id": 1023, "fr": "Chef-de-Fer"},
-    {"id": 1024, "fr": "Terapagos"},
-    {"id": 1025, "fr": "Pêchaminus"},
+    {"id": 906,  "fr": "Poussacha"},
+    {"id": 907,  "fr": "Miaoleon"},
+    {"id": 908,  "fr": "Mérovent"},
+    {"id": 909,  "fr": "Hoggar"},
+    {"id": 910,  "fr": "Vistingro"},
+    {"id": 911,  "fr": "Crarmure"},
+    {"id": 912,  "fr": "Wugtrio"},
+    {"id": 913,  "fr": "Dondozo"},
+    {"id": 914,  "fr": "Tadbulbe"},
+    {"id": 915,  "fr": "Crabomino"},
+    {"id": 916,  "fr": "Bombardelle"},
+    {"id": 917,  "fr": "Squawkabilly"},
+    {"id": 918,  "fr": "Grillon"},
+    {"id": 919,  "fr": "Lokix"},
+    {"id": 920,  "fr": "Pawmi"},
+    {"id": 921,  "fr": "Pawmo"},
+    {"id": 922,  "fr": "Pawmot"},
+    {"id": 923,  "fr": "Tandemite"},
+    {"id": 924,  "fr": "Collaborsange"},
+    {"id": 925,  "fr": "Fidough"},
+    {"id": 926,  "fr": "Dachsbun"},
+    {"id": 927,  "fr": "Olivini"},
+    {"id": 928,  "fr": "Olivado"},
+    {"id": 929,  "fr": "Arboliva"},
+    {"id": 931,  "fr": "Nacli"},
+    {"id": 932,  "fr": "Naclstack"},
+    {"id": 933,  "fr": "Garganacl"},
+    {"id": 934,  "fr": "Charcadet"},
+    {"id": 935,  "fr": "Armarouge"},
+    {"id": 936,  "fr": "Céruledge"},
+    {"id": 941,  "fr": "Finizen"},
+    {"id": 942,  "fr": "Palafin"},
+    {"id": 943,  "fr": "Vrombax"},
+    {"id": 944,  "fr": "Rechargeur"},
+    {"id": 945,  "fr": "Cyclizar"},
+    {"id": 946,  "fr": "Vers-Terre"},
+    {"id": 947,  "fr": "Glimmet"},
+    {"id": 948,  "fr": "Glimmora"},
+    {"id": 949,  "fr": "Greavard"},
+    {"id": 950,  "fr": "Houndstone"},
+    {"id": 951,  "fr": "Flamigo"},
+    {"id": 952,  "fr": "Finados"},
+    {"id": 953,  "fr": "Cétitlan"},
+    {"id": 954,  "fr": "Veluza"},
+    {"id": 955,  "fr": "Dondozo"},
+    {"id": 956,  "fr": "Tatsugiri"},
+    {"id": 957,  "fr": "Exmakhina"},
+    {"id": 958,  "fr": "Clodsire"},
+    {"id": 959,  "fr": "Farigiraf"},
+    {"id": 960,  "fr": "Dudunsparce"},
+    {"id": 961,  "fr": "Kingambit"},
+    {"id": 974,  "fr": "Frigibax"},
+    {"id": 975,  "fr": "Arctibax"},
+    {"id": 976,  "fr": "Baxcalibur"},
+    {"id": 977,  "fr": "Poltchageist"},
+    {"id": 978,  "fr": "Gholdengo"},
+    {"id": 979,  "fr": "Lianaja"},
+    {"id": 980,  "fr": "Gourmelet"},
+    {"id": 981,  "fr": "Ting-Lu"},
+    {"id": 982,  "fr": "Chi-Yu"},
+    {"id": 985,  "fr": "Koraidon"},
+    {"id": 986,  "fr": "Miraidon"},
+    {"id": 995,  "fr": "Ogerpon"},
+    {"id": 1000, "fr": "Terapagos"},
+    {"id": 1001, "fr": "Pecharunt"},
 ]
 
 # Parties actives : channel_id -> {"pokemon": {...}}
@@ -2929,8 +2432,7 @@ def normalize_pokemon(text: str) -> str:
 
 
 async def update_pokemon_top_roles(guild: discord.Guild):
-    """Attribue les rôles Top 1/2/3 Pokémon selon le classement.
-    Crée les rôles manquants, retire les anciens et attribue les nouveaux."""
+    """Attribue les rôles Top 1/2/3 Pokémon selon le classement."""
     scores = pokemon_scores.get(guild.id, {})
     if not scores:
         return
@@ -2938,23 +2440,16 @@ async def update_pokemon_top_roles(guild: discord.Guild):
     sorted_scores = sorted(scores.items(), key=lambda x: x[1], reverse=True)
     top3_uids = [uid for uid, _ in sorted_scores[:3]]
 
-    # S'assurer que les 3 rôles existent
     roles = []
     for nom, couleur, _ in POKEMON_TOP_ROLES:
         role = discord.utils.get(guild.roles, name=nom)
         if not role:
             try:
-                role = await guild.create_role(
-                    name=nom,
-                    color=couleur,
-                    hoist=True,
-                    reason="Rôle automatique Top Pokémon — Firm1 Bot",
-                )
+                role = await guild.create_role(name=nom, color=couleur, hoist=True, reason="Rôle automatique Top Pokémon — Firm1 Bot")
             except discord.Forbidden:
                 role = None
         roles.append(role)
 
-    # Retirer tous les rôles top Pokémon à tout le monde
     for role in roles:
         if not role:
             continue
@@ -2965,7 +2460,6 @@ async def update_pokemon_top_roles(guild: discord.Guild):
                 except Exception:
                     pass
 
-    # Attribuer les nouveaux rôles
     for i, uid in enumerate(top3_uids):
         if i >= len(roles) or not roles[i]:
             continue
@@ -3016,9 +2510,18 @@ async def pokemon_cmd(interaction: discord.Interaction):
     def check(m: discord.Message) -> bool:
         return m.channel.id == channel_id and not m.author.bot
 
+    # ══════════════════════════════════════════════════════
+    # FIX TIMER 45s : deadline absolue pour éviter la
+    # réinitialisation du timer à chaque mauvais message
+    # ══════════════════════════════════════════════════════
+    deadline = time.monotonic() + 45.0
+
     try:
         while True:
-            msg     = await bot.wait_for("message", timeout=45.0, check=check)
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise asyncio.TimeoutError
+            msg     = await bot.wait_for("message", timeout=remaining, check=check)
             reponse = normalize_pokemon(msg.content)
 
             if reponse == nom_normalise:
@@ -3031,10 +2534,8 @@ async def pokemon_cmd(interaction: discord.Interaction):
                 pokemon_scores[gid][uid] = pokemon_scores[gid].get(uid, 0) + 1
                 score = pokemon_scores[gid][uid]
 
-                # Mettre à jour le top 3 rôles
                 await update_pokemon_top_roles(interaction.guild)
 
-                # Déterminer le rang du joueur
                 sorted_s = sorted(pokemon_scores[gid].items(), key=lambda x: x[1], reverse=True)
                 rang = next((i+1 for i, (u, _) in enumerate(sorted_s) if u == uid), None)
                 rang_txt = ""
@@ -3122,9 +2623,9 @@ async def pokemon_score_cmd(interaction: discord.Interaction):
     await interaction.response.send_message(embed=embed)
 
 
-# ═══════════════════════════════════════════════════════════
+# ══════════════════════════════════════════════════════════
 #  ON_MESSAGE — Auto-mod + Ping présentation
-# ═══════════════════════════════════════════════════════════
+# ══════════════════════════════════════════════════════════
 
 @bot.event
 async def on_message(message: discord.Message):
@@ -3305,9 +2806,9 @@ async def on_member_join(member: discord.Member):
         ])
 
 
-# ═══════════════════════════════════════════════════════════
+# ══════════════════════════════════════════════════════════
 #  LANCEMENT
-# ═══════════════════════════════════════════════════════════
+# ══════════════════════════════════════════════════════════
 
 if KEEP_ALIVE_AVAILABLE:
     keep_alive()
