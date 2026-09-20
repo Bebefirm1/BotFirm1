@@ -1,4 +1,3 @@
-
 import re
 import os
 import json
@@ -222,7 +221,7 @@ async def help_cmd(interaction: discord.Interaction):
     page2.add_field(name="👮 Sanctions", value=("`/ban @user` — Bannir un membre\n`/kick @user` — Expulser un membre\n`/mute @user durée` — Mute (10s, 5m, 2h, 1j)\n`/unmute @user` — Retirer le mute\n`/warn @user raison` — Avertir\n`/warns @user` — Voir les avertissements\n`/clear 1-100` — Supprimer des messages\n`/set-log-mod` — Salon de logs mod"), inline=False)
     page2.set_footer(text="Nadouja · Mitteg · Not Feller")
     page3 = bot_embed(title="🤖 Auto-Modération — Page 3/5", description="Modération automatique configurable.", color=COLOR_WARNING)
-    page3.add_field(name="⚙️ Configuration", value=("`/config-auto-mod` — Voir la config\n`/config-antispam` — Config antispam\n`/ajouter-badword` — Ajouter badword\n`/retirer-badword` — Retirer badword\n`/liste-badwords` — Liste des badwords\n`/salon-no-lien` — Toggle liens\n`/salon-no-image` — Toggle images"), inline=False)
+    page3.add_field(name="⚙️ Configuration", value=("`/config-auto-mod` — Ouvrir les réglages interactifs\nMots interdits • Antispam • Liens • Images"), inline=False)
     page3.add_field(name="🚨 Automatique", value=("Mots interdits → suppression + MP\nLiens → suppression par salon\nImages → suppression par salon\nAntispam → mute automatique"), inline=False)
     page3.set_footer(text="Nadouja · Mitteg · Not Feller")
     page4 = bot_embed(title="🛡️ Whitelist & Blacklist — Page 4/5", description="Gestion des accès membres.", color=COLOR_INFO)
@@ -519,33 +518,6 @@ async def retirer_cmd(interaction: discord.Interaction, membre: discord.Member):
 
 
 
-@tree.command(name="configurer-tickets", description="[Admin] Personnalise le fonctionnement des tickets")
-@app_commands.describe(prefixe="Préfixe des salons", message_bienvenue="Texte : {user} et {reason} sont disponibles", delai_fermeture="Suppression après fermeture (1 à 60 secondes)", categorie_defaut="Catégorie Discord par défaut")
-@app_commands.checks.has_permissions(administrator=True)
-async def configure_tickets(interaction: discord.Interaction, prefixe: str | None = None, message_bienvenue: str | None = None, delai_fermeture: app_commands.Range[int, 1, 60] | None = None, categorie_defaut: discord.CategoryChannel | None = None):
-    settings = get_ticket_settings(interaction.guild.id)
-    if prefixe:
-        settings["ticket_prefix"] = re.sub(r"[^a-z0-9-]", "", prefixe.lower())[:40] or "ticket"
-    if message_bienvenue:
-        settings["welcome_message"] = message_bienvenue[:1500]
-    if delai_fermeture is not None:
-        settings["close_delay"] = delai_fermeture
-    if categorie_defaut:
-        settings["default_category_name"] = categorie_defaut.name
-        settings["default_category_id"] = categorie_defaut.id
-    set_guild_config(interaction.guild.id, "ticket_settings", settings)
-    await interaction.response.send_message(embed=firm1_embed("✅ Tickets personnalisés", "Les nouveaux réglages seront appliqués aux prochains tickets.", color=COLOR_SUCCESS), ephemeral=True)
-
-@tree.command(name="configurer-panel-tickets", description="[Admin] Personnalise le panel d'ouverture")
-@app_commands.describe(titre="Titre", description="Description", bouton="Texte du bouton")
-@app_commands.checks.has_permissions(administrator=True)
-async def configure_ticket_panel(interaction: discord.Interaction, titre: str | None = None, description: str | None = None, bouton: str | None = None):
-    settings = get_ticket_settings(interaction.guild.id)
-    if titre: settings["panel_title"] = titre[:256]
-    if description: settings["panel_description"] = description[:4000]
-    if bouton: settings["open_button_label"] = bouton[:80]
-    set_guild_config(interaction.guild.id, "ticket_settings", settings)
-    await interaction.response.send_message(embed=firm1_embed("✅ Panel personnalisé", "Envoyez un nouveau `/panel-tickets` pour appliquer ces textes.", color=COLOR_SUCCESS), ephemeral=True)
 
 
 class TicketPanelModal(discord.ui.Modal, title="Panel d'ouverture"):
@@ -599,6 +571,31 @@ class TicketOpenedModal(discord.ui.Modal, title="Message du ticket créé"):
         set_guild_config(self.guild_id, "ticket_settings", settings)
         await interaction.response.send_message(embed=firm1_embed("✅ Ticket personnalisé", "Les prochains tickets utiliseront ce message.", color=COLOR_SUCCESS), ephemeral=True)
 
+
+class TicketOptionsModal(discord.ui.Modal, title="Options des tickets"):
+    prefixe = discord.ui.TextInput(label="Préfixe des salons", max_length=40)
+    delai = discord.ui.TextInput(label="Délai de suppression (1 à 60 secondes)", max_length=2)
+    informations = discord.ui.TextInput(label="Texte du bouton Informations", style=discord.TextStyle.paragraph, max_length=800)
+    def __init__(self, guild_id: int):
+        super().__init__()
+        self.guild_id = guild_id
+        settings = get_ticket_settings(guild_id)
+        self.prefixe.default = settings["ticket_prefix"]
+        self.delai.default = str(settings["close_delay"])
+        self.informations.default = settings["info_message"]
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            delay = int(self.delai.value)
+        except ValueError:
+            await interaction.response.send_message("Le délai doit être un nombre entre 1 et 60.", ephemeral=True); return
+        if not 1 <= delay <= 60:
+            await interaction.response.send_message("Le délai doit être entre 1 et 60 secondes.", ephemeral=True); return
+        prefix = re.sub(r"[^a-z0-9-]", "", self.prefixe.value.casefold())[:40]
+        settings = get_ticket_settings(self.guild_id)
+        settings.update(ticket_prefix=prefix or "ticket", close_delay=delay, info_message=self.informations.value)
+        set_guild_config(self.guild_id, "ticket_settings", settings)
+        await interaction.response.send_message(embed=firm1_embed("✅ Options enregistrées", "Les prochains tickets utiliseront ces réglages.", color=COLOR_SUCCESS), ephemeral=True)
+
 class TicketConfigView(discord.ui.View):
     def __init__(self, guild_id: int):
         super().__init__(timeout=180)
@@ -620,6 +617,11 @@ class TicketConfigView(discord.ui.View):
         if not self.allowed(interaction):
             await interaction.response.send_message("Accès refusé.", ephemeral=True); return
         await interaction.response.send_modal(TicketOpenedModal(self.guild_id))
+    @discord.ui.button(label="Options", style=discord.ButtonStyle.secondary, emoji="⚙️")
+    async def options(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not self.allowed(interaction):
+            await interaction.response.send_message("Accès refusé.", ephemeral=True); return
+        await interaction.response.send_modal(TicketOptionsModal(self.guild_id))
     @discord.ui.button(label="Actualiser", style=discord.ButtonStyle.secondary, emoji="🔄")
     async def refresh(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.edit_message(embed=ticket_config_embed(interaction.guild), view=self)
@@ -629,7 +631,7 @@ def ticket_config_embed(guild: discord.Guild) -> discord.Embed:
     embed = bot_embed(title="Configuration des tickets", description="Utilisez les boutons ci-dessous pour modifier chaque texte affiché aux membres.", color=COLOR_PRIMARY, timestamp=datetime.datetime.now(datetime.timezone.utc))
     embed.add_field(name="Panel d'ouverture", value=f"**{settings['panel_title']}**\nBouton : {settings['open_button_label']}", inline=False)
     embed.add_field(name="Ticket créé", value=f"**{settings['ticket_open_title']}**\nFermeture : {settings['close_button_label']}", inline=False)
-    embed.add_field(name="Options avancées", value="Préfixe, délai et catégorie par défaut : `/configurer-tickets`.", inline=False)
+    embed.add_field(name="Options avancées", value="Préfixe, délai et texte Informations : bouton **Options**.", inline=False)
     return embed
 
 @tree.command(name="config-tickets", description="[Admin] Ouvre la configuration interactive des tickets")
@@ -957,7 +959,10 @@ def automod_config_embed(guild: discord.Guild) -> discord.Embed:
     no_link = [guild.get_channel(channel_id) for channel_id in cfg.get("no_link_channels", []) if guild.get_channel(channel_id)]
     no_image = [guild.get_channel(channel_id) for channel_id in cfg.get("no_image_channels", []) if guild.get_channel(channel_id)]
     embed = bot_embed(title="Auto-modération", description="Configurez chaque protection depuis les boutons et sélecteurs ci-dessous.", color=COLOR_PRIMARY, timestamp=datetime.datetime.now(datetime.timezone.utc))
-    embed.add_field(name="Mots interdits", value=f"{len(bad_words)} configuré(s)", inline=True)
+    preview = ", ".join(f"`{word}`" for word in bad_words[:12]) or "Aucun"
+    if len(bad_words) > 12:
+        preview += f" · +{len(bad_words) - 12}"
+    embed.add_field(name="Mots interdits", value=preview, inline=True)
     embed.add_field(name="Antispam", value=f"{'Actif' if cfg.get('spam_active', True) else 'Désactivé'} · {cfg.get('spam_limit', SPAM_LIMIT_DEFAULT)} msg / {cfg.get('spam_window', SPAM_WINDOW_DEFAULT)} s", inline=True)
     embed.add_field(name="Salons protégés", value=f"Liens : {len(no_link)} · Images : {len(no_image)}", inline=True)
     return embed
@@ -984,115 +989,11 @@ async def config_automod(interaction: discord.Interaction):
     await interaction.response.send_message(embed=automod_config_embed(interaction.guild), view=AutoModConfigView(interaction.guild.id), ephemeral=True)
 
 
-@tree.command(name="config-antispam", description="[Admin] Personnalise les paramètres de l'antispam")
-@app_commands.describe(limite="Nb messages avant sanction (2-50)", fenetre="Fenêtre en secondes (1-60)", mute_minutes="Durée du mute en minutes (1-1440)", actif="Activer ou désactiver l'antispam")
-@app_commands.checks.has_permissions(administrator=True)
-async def config_antispam(interaction: discord.Interaction, limite: int | None = None, fenetre: int | None = None, mute_minutes: int | None = None, actif: bool | None = None):
-    if limite is not None:
-        if not 2 <= limite <= 50:
-            await interaction.response.send_message(embed=firm1_embed("Valeur invalide", "Limite : entre **2** et **50**.", color=COLOR_ERROR), ephemeral=True)
-            return
-        set_guild_config(interaction.guild.id, "spam_limit", limite)
-    if fenetre is not None:
-        if not 1 <= fenetre <= 60:
-            await interaction.response.send_message(embed=firm1_embed("Valeur invalide", "Fenêtre : entre **1** et **60** secondes.", color=COLOR_ERROR), ephemeral=True)
-            return
-        set_guild_config(interaction.guild.id, "spam_window", fenetre)
-    if mute_minutes is not None:
-        if not 1 <= mute_minutes <= 1440:
-            await interaction.response.send_message(embed=firm1_embed("Valeur invalide", "Durée : entre **1** et **1440** minutes.", color=COLOR_ERROR), ephemeral=True)
-            return
-        set_guild_config(interaction.guild.id, "spam_mute", mute_minutes)
-    if actif is not None:
-        set_guild_config(interaction.guild.id, "spam_active", actif)
-    cfg = get_guild_config(interaction.guild.id)
-    sl  = cfg.get("spam_limit",  SPAM_LIMIT_DEFAULT)
-    sw  = cfg.get("spam_window", SPAM_WINDOW_DEFAULT)
-    sm  = cfg.get("spam_mute",   SPAM_MUTE_DEFAULT)
-    sa  = cfg.get("spam_active", True)
-    await interaction.response.send_message(embed=firm1_embed("🚨 Antispam mis à jour", f"{'🟢 Activé' if sa else '🔴 Désactivé'}", color=COLOR_SUCCESS if sa else COLOR_WARNING, fields=[("📨 Seuil", f"**{sl}** messages", True), ("⏱️ Fenêtre", f"**{sw}** secondes", True), ("🔇 Sanction", f"Mute **{sm}** min", True)]), ephemeral=True)
 
-@tree.command(name="ajouter-badword", description="[Admin] Ajoute un ou plusieurs badwords (séparés par _)")
-@app_commands.describe(mot="Un ou plusieurs mots séparés par _ (ex: mot1_mot2)")
-@app_commands.checks.has_permissions(administrator=True)
-async def add_bad_word(interaction: discord.Interaction, mot: str):
-    cfg       = get_guild_config(interaction.guild.id)
-    bad_words = cfg.get("bad_words", [])
-    nouveaux  = [m.strip().lower() for m in mot.split("_") if m.strip()]
-    deja      = [m for m in nouveaux if m in bad_words]
-    ajoutes   = [m for m in nouveaux if m not in bad_words]
-    if ajoutes:
-        bad_words.extend(ajoutes)
-        set_guild_config(interaction.guild.id, "bad_words", bad_words)
-    fields = [("📊 Total", str(len(bad_words)), True)]
-    if ajoutes:
-        fields.append(("✅ Ajoutés", ", ".join(f"`{m}`" for m in ajoutes), False))
-    if deja:
-        fields.append(("⚠️ Déjà présents", ", ".join(f"`{m}`" for m in deja), False))
-    await interaction.response.send_message(embed=firm1_embed("✅ Badwords mis à jour" if ajoutes else "⚠️ Aucun mot ajouté", f"**{len(ajoutes)}** ajouté(s), **{len(deja)}** déjà présent(s).", color=COLOR_SUCCESS if ajoutes else COLOR_WARNING, fields=fields), ephemeral=True)
 
-@tree.command(name="retirer-badword", description="[Admin] Retire un badword")
-@app_commands.describe(mot="Le mot à retirer")
-@app_commands.checks.has_permissions(administrator=True)
-async def remove_bad_word(interaction: discord.Interaction, mot: str):
-    cfg       = get_guild_config(interaction.guild.id)
-    bad_words = cfg.get("bad_words", [])
-    mot       = mot.lower()
-    if mot not in bad_words:
-        await interaction.response.send_message(embed=firm1_embed("Introuvable", f"`{mot}` n'est pas dans la liste.", color=COLOR_WARNING), ephemeral=True)
-        return
-    bad_words.remove(mot)
-    set_guild_config(interaction.guild.id, "bad_words", bad_words)
-    await interaction.response.send_message(embed=firm1_embed("✅ Mot retiré", f"`{mot}` n'est plus interdit.", color=COLOR_SUCCESS), ephemeral=True)
 
-@tree.command(name="liste-badwords", description="[Admin] Affiche tous les mots interdits")
-@app_commands.checks.has_permissions(administrator=True)
-async def list_bad_words(interaction: discord.Interaction):
-    cfg       = get_guild_config(interaction.guild.id)
-    bad_words = cfg.get("bad_words", [])
-    if not bad_words:
-        await interaction.response.send_message(embed=firm1_embed("📋 Badwords", "Aucun mot interdit configuré.", color=COLOR_INFO), ephemeral=True)
-        return
-    mots_text = ", ".join(f"`{w}`" for w in bad_words)
-    if len(mots_text) > 1000:
-        mots_text = mots_text[:997] + "..."
-    await interaction.response.send_message(embed=firm1_embed("📋 Liste des Badwords", mots_text, color=COLOR_WARNING, fields=[("📊 Total", str(len(bad_words)), True)]), ephemeral=True)
 
-@tree.command(name="salon-no-lien", description="[Admin] Toggle interdiction de liens dans un salon")
-@app_commands.describe(salon="Le salon concerné (défaut : salon actuel)")
-@app_commands.checks.has_permissions(administrator=True)
-async def toggle_no_link(interaction: discord.Interaction, salon: discord.TextChannel | None = None):
-    target  = salon or interaction.channel
-    cfg     = get_guild_config(interaction.guild.id)
-    no_link = cfg.get("no_link_channels", [])
-    if target.id in no_link:
-        no_link.remove(target.id)
-        msg   = f"✅ Les liens sont désormais **autorisés** dans {target.mention}."
-        color = COLOR_SUCCESS
-    else:
-        no_link.append(target.id)
-        msg   = f"🔗 Les liens sont désormais **interdits** dans {target.mention}."
-        color = COLOR_WARNING
-    set_guild_config(interaction.guild.id, "no_link_channels", no_link)
-    await interaction.response.send_message(embed=firm1_embed("Salon no-lien mis à jour", msg, color=color), ephemeral=True)
 
-@tree.command(name="salon-no-image", description="[Admin] Toggle interdiction d'images dans un salon")
-@app_commands.describe(salon="Le salon concerné (défaut : salon actuel)")
-@app_commands.checks.has_permissions(administrator=True)
-async def toggle_no_image(interaction: discord.Interaction, salon: discord.TextChannel | None = None):
-    target   = salon or interaction.channel
-    cfg      = get_guild_config(interaction.guild.id)
-    no_image = cfg.get("no_image_channels", [])
-    if target.id in no_image:
-        no_image.remove(target.id)
-        msg   = f"✅ Les images sont désormais **autorisées** dans {target.mention}."
-        color = COLOR_SUCCESS
-    else:
-        no_image.append(target.id)
-        msg   = f"🖼️ Les images sont désormais **interdites** dans {target.mention}."
-        color = COLOR_WARNING
-    set_guild_config(interaction.guild.id, "no_image_channels", no_image)
-    await interaction.response.send_message(embed=firm1_embed("Salon no-image mis à jour", msg, color=color), ephemeral=True)
 
 
 # ═══════════════════════════════════════════════════════════
