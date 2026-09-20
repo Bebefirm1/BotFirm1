@@ -1,3 +1,4 @@
+
 import re
 import os
 import json
@@ -65,7 +66,7 @@ def firm1_embed(
     thumbnail: str | None = None,
     fields: list[tuple[str, str, bool]] | None = None,
 ) -> discord.Embed:
-    embed = discord.Embed(
+    embed = bot_embed(
         title=title,
         description=description,
         color=color,
@@ -77,6 +78,14 @@ def firm1_embed(
     if fields:
         for name, value, inline in fields:
             embed.add_field(name=name, value=value, inline=inline)
+    return embed
+
+
+def bot_embed(*args, **kwargs) -> discord.Embed:
+    """Habillage visuel commun à tous les panneaux du bot."""
+    embed = discord.Embed(*args, **kwargs)
+    embed.set_author(name=BOT_LABEL)
+    embed.set_footer(text="Nadouja · Mitteg · Not Feller")
     return embed
 
 CONFIG_FILE = "ticket_config.json"
@@ -119,14 +128,14 @@ async def send_mod_log(guild: discord.Guild, **kwargs):
     channel = guild.get_channel(log_id)
     if not channel:
         return
-    embed = discord.Embed(
+    embed = bot_embed(
         title=kwargs.get("title", "Action de modération"),
         color=kwargs.get("color", COLOR_WARNING),
         timestamp=datetime.datetime.now(datetime.timezone.utc),
     )
     for name, value, inline in kwargs.get("fields", []):
         embed.add_field(name=name, value=value, inline=inline)
-    embed.set_footer(text="Bot Discord • Logs Modération")
+    embed.set_footer(text="Nadouja · Mitteg · Not Feller")
     try:
         await channel.send(embed=embed)
     except Exception:
@@ -196,25 +205,25 @@ async def on_app_command_error(interaction: discord.Interaction, error: app_comm
 
 @tree.command(name="help", description="Affiche l'aide complète de Bot Discord")
 async def help_cmd(interaction: discord.Interaction):
-    page1 = discord.Embed(title="🎫 Tickets — Page 1/5", description="Système de tickets de support.", color=COLOR_PRIMARY)
+    page1 = bot_embed(title="🎫 Tickets — Page 1/5", description="Système de tickets de support.", color=COLOR_PRIMARY)
     page1.add_field(name="📩 Membres", value=("`/ticket` — Ouvrir un ticket\n`/fermer` — Fermer votre ticket\n`/ajouter @user` — Ajouter un membre\n`/retirer @user` — Retirer un membre"), inline=False)
     page1.add_field(name="⚙️ Administration", value=("`/panel-tickets` — Envoyer le panel\n`/config-tickets` — Voir la configuration\n`/set-log-tickets` — Salon de logs\n`/ajouter-role-ticket` — Ajouter rôle ping\n`/retirer-role-ticket` — Retirer rôle ping\n`/ajouter-categorie-ticket` — Ajouter catégorie\n`/retirer-categorie-ticket` — Retirer catégorie\n`/reset-config-tickets` — Réinitialiser"), inline=False)
-    page1.set_footer(text="Bot Discord • Support Gaming")
-    page2 = discord.Embed(title="🔨 Modération — Page 2/5", description="Commandes de modération manuelle.", color=COLOR_ERROR)
+    page1.set_footer(text="Nadouja · Mitteg · Not Feller")
+    page2 = bot_embed(title="🔨 Modération — Page 2/5", description="Commandes de modération manuelle.", color=COLOR_ERROR)
     page2.add_field(name="👮 Sanctions", value=("`/ban @user` — Bannir un membre\n`/kick @user` — Expulser un membre\n`/mute @user durée` — Mute (10s, 5m, 2h, 1j)\n`/unmute @user` — Retirer le mute\n`/warn @user raison` — Avertir\n`/warns @user` — Voir les avertissements\n`/clear 1-100` — Supprimer des messages\n`/set-log-mod` — Salon de logs mod"), inline=False)
-    page2.set_footer(text="Bot Discord • Support Gaming")
-    page3 = discord.Embed(title="🤖 Auto-Modération — Page 3/5", description="Modération automatique configurable.", color=COLOR_WARNING)
+    page2.set_footer(text="Nadouja · Mitteg · Not Feller")
+    page3 = bot_embed(title="🤖 Auto-Modération — Page 3/5", description="Modération automatique configurable.", color=COLOR_WARNING)
     page3.add_field(name="⚙️ Configuration", value=("`/config-auto-mod` — Voir la config\n`/config-antispam` — Config antispam\n`/ajouter-badword` — Ajouter badword\n`/retirer-badword` — Retirer badword\n`/liste-badwords` — Liste des badwords\n`/salon-no-lien` — Toggle liens\n`/salon-no-image` — Toggle images"), inline=False)
     page3.add_field(name="🚨 Automatique", value=("Mots interdits → suppression + MP\nLiens → suppression par salon\nImages → suppression par salon\nAntispam → mute automatique"), inline=False)
-    page3.set_footer(text="Bot Discord • Support Gaming")
-    page4 = discord.Embed(title="🛡️ Whitelist & Blacklist — Page 4/5", description="Gestion des accès membres.", color=COLOR_INFO)
+    page3.set_footer(text="Nadouja · Mitteg · Not Feller")
+    page4 = bot_embed(title="🛡️ Whitelist & Blacklist — Page 4/5", description="Gestion des accès membres.", color=COLOR_INFO)
     page4.add_field(name="✅ Whitelist — bypass auto-mod", value=("`/whitelist-ajouter @user` — Ajouter\n`/whitelist-retirer @user` — Retirer\n`/whitelist-liste` — Voir la liste"), inline=False)
     page4.add_field(name="⛔ Blacklist — expulsion automatique", value=("`/blacklist-ajouter @user` — Blacklister\n`/blacklist-retirer @user` — Retirer\n`/blacklist-liste` — Voir la liste"), inline=False)
-    page4.set_footer(text="Bot Discord • Support Gaming")
-    page5 = discord.Embed(title="🎮 Mini-Jeux & Utilitaires — Page 5/5", description="Jeux et outils divers.", color=COLOR_SUCCESS)
+    page4.set_footer(text="Nadouja · Mitteg · Not Feller")
+    page5 = bot_embed(title="🎮 Mini-Jeux & Utilitaires — Page 5/5", description="Jeux et outils divers.", color=COLOR_SUCCESS)
     page5.add_field(name="🎮 Mini-Jeux", value=("`/pile-ou-face` — Lancer une pièce\n`/dé` — Lancer un dé\n`/rps` — Pierre-Papier-Ciseaux\n`/nombre` — Deviner un nombre\n`/8ball` — Boule magique\n`/trivia` — Culture générale\n`/pokemon` — Quel est ce Pokémon ?\n`/pokemon-score` — Classement des dresseurs"), inline=False)
     page5.add_field(name="🛠️ Utilitaires", value=("`/ping` — Latence du bot\n`/info-serveur` — Infos serveur\n`/info-user` — Infos membre\n`/avatar` — Avatar\n`/say` — Parler à la place du bot\n`/renommer-bot` — Changer le pseudo\n`/help` — Cette aide"), inline=False)
-    page5.set_footer(text="Bot Discord • Support Gaming")
+    page5.set_footer(text="Nadouja · Mitteg · Not Feller")
     pages = [page1, page2, page3, page4, page5]
 
     class HelpView(discord.ui.View):
@@ -417,14 +426,20 @@ async def _creer_ticket(interaction: discord.Interaction, raison: str = "Non sp�
             ping_mentions.append(role.mention)
     channel = await category.create_text_channel(f"{settings['ticket_prefix']}-{user.name.lower().replace(' ', '-')}", overwrites=overwrites)
     open_tickets[user.id] = {"channel_id": channel.id, "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(), "reason": raison}
-    embed = discord.Embed(title="🎫  Ticket ouvert", description=settings["welcome_message"].format(user=user.mention, reason=raison), color=COLOR_SUCCESS, timestamp=datetime.datetime.now(datetime.timezone.utc))
-    embed.add_field(name="👤 Demandeur", value=user.mention, inline=True)
-    embed.add_field(name="🆔 ID", value=f"`{user.id}`", inline=True)
-    embed.add_field(name="📅 Ouvert le", value=f"<t:{int(datetime.datetime.now(datetime.timezone.utc).timestamp())}:F>", inline=False)
+    embed = bot_embed(
+        title="🎫 Votre demande est prise en charge",
+        description=settings["welcome_message"].format(user=user.mention, reason=raison),
+        color=COLOR_SUCCESS,
+        timestamp=datetime.datetime.now(datetime.timezone.utc),
+    )
+    embed.add_field(name="Demandeur", value=user.mention, inline=True)
+    embed.add_field(name="Référence", value=f"`{user.id}`", inline=True)
+    embed.add_field(name="Ouvert le", value=f"<t:{int(datetime.datetime.now(datetime.timezone.utc).timestamp())}:F>", inline=False)
+    embed.add_field(name="Prochaine étape", value="Expliquez toute information utile ici ; le personnel vous répondra dès que possible.", inline=False)
     if ping_mentions:
         embed.add_field(name="🔔 Staff notifié", value=" ".join(ping_mentions), inline=False)
     embed.set_thumbnail(url=user.display_avatar.url)
-    embed.set_footer(text="Bot Discord • Support")
+    embed.set_footer(text="Nadouja · Mitteg · Not Feller")
     await channel.send(content=f"{user.mention} {' '.join(ping_mentions)}".strip(), embed=embed, view=TicketCloseView())
     await interaction.response.send_message(embed=firm1_embed("Ticket créé !", f"Votre ticket est disponible ici : {channel.mention}", color=COLOR_SUCCESS), ephemeral=True)
     log_ch = guild.get_channel(cfg.get("log_channel_id")) if cfg.get("log_channel_id") else None
@@ -514,7 +529,7 @@ async def config_tickets(interaction: discord.Interaction):
     for c in cfg.get("ticket_categories", []):
         disc_cat = interaction.guild.get_channel(c.get("discord_category_id")) if c.get("discord_category_id") else None
         cats_value += f"{c.get('emoji','🎫')} **{c['label']}** → {disc_cat.mention if disc_cat else '`défaut`'}\n"
-    embed = discord.Embed(title="⚙️ Configuration — Tickets", color=COLOR_PRIMARY, timestamp=datetime.datetime.now(datetime.timezone.utc))
+    embed = bot_embed(title="⚙️ Configuration — Tickets", color=COLOR_PRIMARY, timestamp=datetime.datetime.now(datetime.timezone.utc))
     embed.add_field(name="📋 Salon de logs", value=log_ch.mention if log_ch else "❌ Non configuré", inline=False)
     embed.add_field(name="🔔 Rôles pingés", value=" ".join(r.mention for r in ping_roles) if ping_roles else "❌ Aucun", inline=False)
     embed.add_field(name="🗂️ Catégories", value=cats_value if cats_value else "❌ Aucune", inline=False)
@@ -602,11 +617,36 @@ async def panel_tickets(interaction: discord.Interaction):
     ping_roles = [interaction.guild.get_role(rid) for rid in cfg.get("ping_roles", []) if interaction.guild.get_role(rid)]
     log_ch = interaction.guild.get_channel(cfg.get("log_channel_id")) if cfg.get("log_channel_id") else None
     settings = get_ticket_settings(interaction.guild.id)
-    embed = discord.Embed(title=settings["panel_title"], description=settings["panel_description"], color=COLOR_PRIMARY, timestamp=datetime.datetime.now(datetime.timezone.utc))
-    embed.add_field(name="📋 Comment ça fonctionne", value=("**1** Cliquez sur `🎫 Ouvrir un ticket`\n**2** Remplissez le formulaire\n**3** Échangez avec le staff en privé\n**4** Fermez le ticket une fois résolu"), inline=True)
-    embed.add_field(name="🔔 Staff de support", value=" ".join(r.mention for r in ping_roles) if ping_roles else "*Aucun rôle configuré*", inline=False)
-    embed.add_field(name="📌 Règles importantes", value=("• Un seul ticket actif par membre\n• Soyez précis et respectueux\n• Pas de spam ni d'abus\n• Temps de réponse moyen : **< 2h**"), inline=False)
-    embed.set_footer(text=f"Bot Discord • {interaction.guild.name}")
+    embed = bot_embed(
+        title=settings["panel_title"],
+        description=(
+            f"{settings['panel_description']}\n\n"
+            "Cliquez sur le bouton ci-dessous pour créer un espace privé avec l'équipe."
+        ),
+        color=COLOR_PRIMARY,
+        timestamp=datetime.datetime.now(datetime.timezone.utc),
+    )
+    embed.add_field(
+        name="01 · Créer votre demande",
+        value="Sélectionnez une catégorie, puis décrivez votre besoin dans le formulaire.",
+        inline=False,
+    )
+    embed.add_field(
+        name="02 · Échanger en privé",
+        value="Un salon visible uniquement par vous et le personnel concerné sera créé.",
+        inline=False,
+    )
+    embed.add_field(
+        name="À savoir",
+        value="• Un ticket actif par membre\n• Soyez précis et respectueux\n• Fermez le ticket une fois votre demande résolue",
+        inline=True,
+    )
+    embed.add_field(
+        name="Équipe notifiée",
+        value=" ".join(r.mention for r in ping_roles) if ping_roles else "Aucun rôle de support configuré",
+        inline=True,
+    )
+    embed.set_footer(text=f"Centre d'assistance · {interaction.guild.name}")
     if interaction.guild.icon:
         embed.set_thumbnail(url=interaction.guild.icon.url)
     view = TicketOpenView()
@@ -735,12 +775,12 @@ async def config_automod(interaction: discord.Interaction):
     spam_window = cfg.get("spam_window", SPAM_WINDOW_DEFAULT)
     spam_mute   = cfg.get("spam_mute",   SPAM_MUTE_DEFAULT)
     spam_active = cfg.get("spam_active", True)
-    embed = discord.Embed(title="⚙️ Auto-Modération — Config", color=COLOR_PRIMARY, timestamp=datetime.datetime.now(datetime.timezone.utc))
+    embed = bot_embed(title="⚙️ Auto-Modération — Config", color=COLOR_PRIMARY, timestamp=datetime.datetime.now(datetime.timezone.utc))
     embed.add_field(name="🤬 Mots interdits", value=", ".join(f"`{w}`" for w in bad_words) if bad_words else "❌ Aucun", inline=False)
     embed.add_field(name="🔗 Salons sans liens", value=" ".join(c.mention for c in no_link_ch) if no_link_ch else "❌ Aucun", inline=False)
     embed.add_field(name="🖼️ Salons sans images", value=" ".join(c.mention for c in no_image_ch) if no_image_ch else "❌ Aucun", inline=False)
     embed.add_field(name="🚨 Antispam", value=(f"{'🟢 Actif' if spam_active else '🔴 Désactivé'}\n**Seuil :** {spam_limit} msg en {spam_window}s\n**Sanction :** mute {spam_mute} min"), inline=False)
-    embed.set_footer(text="Bot Discord • Support Gaming")
+    embed.set_footer(text="Nadouja · Mitteg · Not Feller")
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
 @tree.command(name="config-antispam", description="[Admin] Personnalise les paramètres de l'antispam")
@@ -1477,7 +1517,7 @@ class PokemonRoleSetupView(discord.ui.View):
 @tree.command(name="configuration-initiale", description="[Admin] Configure les rôles du Top 3 Pokémon")
 @app_commands.checks.has_permissions(administrator=True)
 async def initial_setup(interaction: discord.Interaction):
-    await interaction.response.send_message(embed=firm1_embed("Configuration initiale", "Voulez-vous créer des rôles pour le Top 3 Pokémon ?", color=COLOR_PRIMARY), view=PokemonRoleSetupView(), ephemeral=True)
+    await interaction.response.send_message(embed=firm1_embed("Configuration initiale", "Souhaitez-vous attribuer automatiquement des rôles aux trois premiers du classement Pokémon ?\n\nVous pourrez saisir le nom de chaque rôle avant leur création.", color=COLOR_PRIMARY), view=PokemonRoleSetupView(), ephemeral=True)
 
 def get_pokemon_top_roles(guild: discord.Guild):
     configured = get_guild_config(guild.id).get("pokemon_top_roles")
@@ -1543,7 +1583,7 @@ async def pokemon_cmd(interaction: discord.Interaction):
         f"sprites/pokemon/other/official-artwork/{pokemon['id']}.png"
     )
 
-    embed = discord.Embed(
+    embed = bot_embed(
         title="❓ Quel est ce Pokémon ?",
         description=(
             "Regardez bien cette image et tapez le **nom français** dans le chat !\n\n"
@@ -1598,7 +1638,7 @@ async def pokemon_cmd(interaction: discord.Interaction):
                 elif rang == 3:
                     rang_txt = f"\n\n🥉 **{msg.author.display_name}** est désormais **Grand connaisseur des Pokémon** !"
 
-                win_embed = discord.Embed(
+                win_embed = bot_embed(
                     title="🎉 Bonne réponse !",
                     description=(
                         f"{msg.author.mention} a trouvé ! C'était **{pokemon['fr']}** !\n\n"
@@ -1615,7 +1655,7 @@ async def pokemon_cmd(interaction: discord.Interaction):
 
     except asyncio.TimeoutError:
         active_pokemon_games.pop(channel_id, None)
-        timeout_embed = discord.Embed(
+        timeout_embed = bot_embed(
             title="⏰ Temps écoulé !",
             description=f"Personne n'a trouvé... C'était **{pokemon['fr']}** !",
             color=COLOR_ERROR,
@@ -1645,9 +1685,9 @@ async def pokemon_score_cmd(interaction: discord.Interaction):
         elif i == 1: role_txt = " — *Expert du pokédex*"
         elif i == 2: role_txt = " — *Grand connaisseur des Pokémon*"
         lines.append(f"{medal} **{name}**{role_txt} : {score} bonne(s) réponse(s)")
-    embed = discord.Embed(title="🏆 Classement Pokémon — Meilleurs Dresseurs", description="\n".join(lines), color=COLOR_WARNING, timestamp=datetime.datetime.now(datetime.timezone.utc))
+    embed = bot_embed(title="🏆 Classement Pokémon — Meilleurs Dresseurs", description="\n".join(lines), color=COLOR_WARNING, timestamp=datetime.datetime.now(datetime.timezone.utc))
     embed.add_field(name="🎭 Titres du Top 3", value=("🥇 **1er** → Professeur Pokémon\n🥈 **2ème** → Expert du pokédex\n🥉 **3ème** → Grand connaisseur des Pokémon"), inline=False)
-    embed.set_footer(text="Bot Discord • Support Gaming")
+    embed.set_footer(text="Nadouja · Mitteg · Not Feller")
     await interaction.response.send_message(embed=embed)
 
 
@@ -1666,7 +1706,7 @@ async def on_message(message: discord.Message):
         and message.content.strip() in (f"<@{bot.user.id}>", f"<@!{bot.user.id}>")
     ):
         cfg   = get_guild_config(message.guild.id)
-        embed = discord.Embed(
+        embed = bot_embed(
             title="👾  Bot Discord",
             description=("```\n  Un bot de support, modération et mini-jeux.\n  Support • Modération • Mini-Jeux\n```\nTapez `/help` pour voir toutes les commandes."),
             color=COLOR_PRIMARY,
