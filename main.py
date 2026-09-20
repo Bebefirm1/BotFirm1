@@ -1,4 +1,3 @@
-
 import re
 import os
 import json
@@ -259,7 +258,15 @@ async def ping_cmd(interaction: discord.Interaction):
     lat    = round(bot.latency * 1000)
     color  = COLOR_SUCCESS if lat < 100 else (COLOR_WARNING if lat < 200 else COLOR_ERROR)
     status = "🟢 Excellent" if lat < 100 else ("🟡 Correct" if lat < 200 else "🔴 Élevé")
-    await interaction.response.send_message(embed=firm1_embed("Pong !", f"**Latence :** `{lat} ms`\n**Statut :** {status}", color=color))
+    embed = bot_embed(
+        title="🏓 Pong",
+        description="Connexion au serveur Discord vérifiée.",
+        color=color,
+        timestamp=datetime.datetime.now(datetime.timezone.utc),
+    )
+    embed.add_field(name="Latence", value=f"`{lat} ms`", inline=True)
+    embed.add_field(name="État", value=status, inline=True)
+    await interaction.response.send_message(embed=embed)
 
 @tree.command(name="info-serveur", description="Informations sur le serveur")
 async def server_info(interaction: discord.Interaction):
@@ -1707,13 +1714,13 @@ async def on_message(message: discord.Message):
     ):
         cfg   = get_guild_config(message.guild.id)
         embed = bot_embed(
-            title="👾  Bot Discord",
-            description=("```\n  Un bot de support, modération et mini-jeux.\n  Support • Modération • Mini-Jeux\n```\nTapez `/help` pour voir toutes les commandes."),
+            title="👋 Bienvenue",
+            description="Je peux vous aider avec la modération, le support et les mini-jeux.\nUtilisez `/help` pour consulter toutes les commandes.",
             color=COLOR_PRIMARY,
             timestamp=datetime.datetime.now(datetime.timezone.utc),
         )
-        embed.add_field(name="📊 Stats sur ce serveur", value=(f"🎫 Catégories tickets : **{len(cfg.get('ticket_categories', []))}**\n🚫 Mots interdits : **{len(cfg.get('bad_words', []))}**\n🔗 Salons sans liens : **{len(cfg.get('no_link_channels', []))}**\n🖼️ Salons sans images : **{len(cfg.get('no_image_channels', []))}**"), inline=True)
-        embed.add_field(name="⚡ Fonctionnalités", value=("🎫 Système de tickets\n🔨 Modération complète\n🤖 Auto-modération\n🛡️ Whitelist & Blacklist\n🎮 Mini-jeux"), inline=True)
+        embed.add_field(name="Aperçu du serveur", value=(f"🎫 Catégories tickets : **{len(cfg.get('ticket_categories', []))}**\n🚫 Mots interdits : **{len(cfg.get('bad_words', []))}**\n🔗 Salons sans liens : **{len(cfg.get('no_link_channels', []))}**\n🖼️ Salons sans images : **{len(cfg.get('no_image_channels', []))}**"), inline=True)
+        embed.add_field(name="Fonctionnalités", value=("🎫 Système de tickets\n🔨 Modération complète\n🤖 Auto-modération\n🛡️ Whitelist & Blacklist\n🎮 Mini-jeux"), inline=True)
         embed.set_thumbnail(url=bot.user.display_avatar.url)
         embed.set_footer(text=f"Bot Discord • Sur {len(bot.guilds)} serveur(s)")
         await message.reply(embed=embed, mention_author=False)
