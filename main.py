@@ -475,8 +475,8 @@ async def _creer_ticket(interaction: discord.Interaction, raison: str = "Non sp�
     channel = await category.create_text_channel(f"{settings['ticket_prefix']}-{user.name.lower().replace(' ', '-')}", overwrites=overwrites)
     open_tickets[user.id] = {"channel_id": channel.id, "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(), "reason": raison, "ping_roles": list(ping_role_ids), "ticket_type": ticket_type}
     embed = discord.Embed(
-        title=settings["ticket_open_title"],
-        description=settings["welcome_message"].replace("{user}", user.mention).replace("{reason}", raison),
+        title=(route or {}).get("ticket_open_title", settings["ticket_open_title"]),
+        description=(route or {}).get("welcome_message", settings["welcome_message"]).replace("{user}", user.mention).replace("{reason}", raison),
         color=COLOR_SUCCESS,
     )
     close_view = TicketCloseView()
@@ -604,15 +604,15 @@ def ticket_image_extension(data: bytes) -> str:
     raise ValueError("Choisissez une image PNG, JPEG, GIF ou WebP.")
 
 
-async def save_ticket_image(interaction: discord.Interaction, kind: str, attachment: discord.Attachment | None, type_label: str | None = None):
+async def save_ticket_image(interaction: discord.Interaction, kind: str, attachment: discord.Attachment | None, type_label: str | None = None, notify: bool = True):
     if not interaction.guild or not interaction.user.guild_permissions.administrator:
         await interaction.response.send_message("Accès refusé.", ephemeral=True)
-        return
+        return False
     categories = get_guild_config(interaction.guild.id).get("ticket_categories", [])
     route = next((c for c in categories if c["label"] == type_label), None) if type_label is not None else None
     if type_label is not None and route is None:
         await interaction.response.send_message("Ce type n'existe plus.", ephemeral=True)
-        return
+        return False
     storage = route.get("banner_storage") or "type_" + os.urandom(16).hex() if route is not None else kind
     path = ticket_image_path(interaction.guild.id, storage)
     if not interaction.response.is_done():
@@ -647,10 +647,12 @@ async def save_ticket_image(interaction: discord.Interaction, kind: str, attachm
     except (ValueError, OSError, discord.HTTPException) as error:
         message = str(error) if isinstance(error, ValueError) else "Impossible d'enregistrer l'image. Réessayez."
         await interaction.followup.send(message, ephemeral=True)
-        return
+        return False
     message = "Bannière enregistrée." if attachment is not None else "Aucune bannière."
     message += " Publiez le panneau avec /panel-tickets." if kind == "panel" else " Elle sera appliquée aux prochains tickets."
-    await interaction.followup.send(message, ephemeral=True)
+    if notify:
+        await interaction.followup.send(message, ephemeral=True)
+    return True
 
 
 async def send_ticket_embed(channel, guild_id: int, kind: str, settings: dict, embed: discord.Embed, **kwargs):
@@ -703,6 +705,49 @@ async def image_tickets(interaction: discord.Interaction, destination: str, imag
 
 @image_tickets.autocomplete("type_ticket")
 async def image_ticket_type_autocomplete(interaction: discord.Interaction, current: str):
+    return await ticket_type_autocomplete(interaction, current)
+
+
+@tree.command(name="config-type-ticket", description="[Admin] Modifie le titre, la description, l'emoji et la bannière d'un type")
+@app_commands.checks.has_permissions(administrator=True)
+@app_commands.describe(type_ticket="Type de ticket à personnaliser", titre="Titre du message du ticket créé", description="Message du ticket ; variables {user} et {reason}", emoji="Emoji classique ou personnalisé", image="Glissez la bannière ici, comme avec /say (optionnel)", retirer_image="Retirer la bannière de ce type")
+async def config_type_ticket(interaction: discord.Interaction, type_ticket: str, titre: str | None = None, description: str | None = None, emoji: str | None = None, image: discord.Attachment | None = None, retirer_image: bool = False):
+    categories = get_guild_config(interaction.guild.id).get("ticket_categories", [])
+    route = next((c for c in categories if c["label"] == type_ticket), None)
+    if route is None:
+        await interaction.response.send_message("Choisissez un type existant dans la liste.", ephemeral=True)
+        return
+    if (titre is not None and (not titre.strip() or len(titre) > 256)) or (description is not None and len(description) > 1500):
+        await interaction.response.send_message("Titre : 1 à 256 caractères ; description : 1500 caractères maximum.", ephemeral=True)
+        return
+    if image is not None and retirer_image:
+        await interaction.response.send_message("Choisissez une image ou son retrait, pas les deux.", ephemeral=True)
+        return
+    try:
+        parsed_emoji = ticket_emoji_value(emoji, interaction.guild) if emoji is not None else None
+    except ValueError as error:
+        await interaction.response.send_message(str(error), ephemeral=True)
+        return
+    if image is not None or retirer_image:
+        if not await save_ticket_image(interaction, "ticket", image, type_ticket, notify=False):
+            return
+    categories = get_guild_config(interaction.guild.id).get("ticket_categories", [])
+    route = next((c for c in categories if c["label"] == type_ticket), None)
+    send = interaction.followup.send if interaction.response.is_done() else interaction.response.send_message
+    if route is None:
+        await send("Ce type a été supprimé. Rouvrez la configuration.", ephemeral=True)
+        return
+    if titre is not None:
+        route["ticket_open_title"] = titre
+    if description is not None:
+        route["welcome_message"] = description
+    if parsed_emoji is not None:
+        route["emoji"] = parsed_emoji
+    set_guild_config(interaction.guild.id, "ticket_categories", categories)
+    await send("Type enregistré. Les prochains tickets utiliseront ces textes et cette bannière.", embed=ticket_route_embed(interaction.guild, type_ticket), view=TicketRoutingView(interaction.guild.id, type_ticket), ephemeral=True)
+
+@config_type_ticket.autocomplete("type_ticket")
+async def config_type_ticket_autocomplete(interaction: discord.Interaction, current: str):
     return await ticket_type_autocomplete(interaction, current)
 
 
@@ -894,7 +939,7 @@ class TicketRoutingView(TicketAdminView):
 
 def ticket_types_embed(guild_id: int) -> discord.Embed:
     count = len(get_guild_config(guild_id).get("ticket_categories", []))
-    return discord.Embed(title=f"Types de tickets ({count}/25)", description="Ajoutez un type ou sélectionnez-en un pour choisir ses rôles à notifier et sa catégorie Discord.", color=COLOR_PRIMARY)
+    return discord.Embed(title=f"Types de tickets ({count}/25)", description="Ajoutez un type ou sélectionnez-en un pour ses rôles et sa catégorie. Pour son titre, sa description et sa bannière ensemble : `/config-type-ticket`.", color=COLOR_PRIMARY)
 
 
 class TicketTypeModal(discord.ui.Modal, title="Ajouter un type de ticket"):
@@ -1012,7 +1057,7 @@ def ticket_config_embed(guild: discord.Guild) -> discord.Embed:
     embed = bot_embed(title="Configuration des tickets", description="Personnalisez les messages avec les boutons. Dans Informations, videz les détails facultatifs pour les masquer.", color=COLOR_PRIMARY, timestamp=datetime.datetime.now(datetime.timezone.utc))
     embed.add_field(name="Panel d'ouverture", value=f"**{settings['panel_title']}**\nBouton : {settings['open_button_label']}", inline=False)
     embed.add_field(name="Ticket créé", value=f"**{settings['ticket_open_title']}**\nFermeture : {settings['close_button_label']}", inline=False)
-    embed.add_field(name="Images", value="Bannière centrale facultative dans **Panel d’ouverture** ; bannière propre à chaque type dans **Types de tickets**.", inline=False)
+    embed.add_field(name="Images", value="`/panel-tickets` et `/config-type-ticket` : **titre**, **description** et **image** dans la même commande, comme `/say`. Image facultative ; omise = bannière conservée.", inline=False)
     embed.add_field(name="Options avancées", value="Préfixe, délai et texte Informations : bouton **Options**.", inline=False)
     cfg = get_guild_config(guild.id)
     embed.add_field(name="Routage des tickets", value=f"**{len(cfg.get('ticket_categories', []))} types** · Rôles et catégorie réglables pour chaque type.\nUtilisez les boutons ci-dessous.", inline=False)
@@ -1098,9 +1143,26 @@ async def reset_config_tickets(interaction: discord.Interaction):
         _save_config(cfg)
     await interaction.response.send_message(embed=firm1_embed("🔄 Config réinitialisée", "Logs, rôles et catégories remis à zéro.", color=COLOR_WARNING), ephemeral=True)
 
-@tree.command(name="panel-tickets", description="[Admin] Envoie le panel d'ouverture de tickets")
+@tree.command(name="panel-tickets", description="[Admin] Configure et envoie le panel d'ouverture de tickets")
+@app_commands.describe(titre="Titre du panneau (optionnel)", description="Description du panneau (optionnelle)", image="Glissez la bannière ici, comme avec /say (optionnel)", retirer_image="Retirer la bannière enregistrée")
 @app_commands.checks.has_permissions(administrator=True)
-async def panel_tickets(interaction: discord.Interaction):
+async def panel_tickets(interaction: discord.Interaction, titre: str | None = None, description: str | None = None, image: discord.Attachment | None = None, retirer_image: bool = False):
+    if (titre is not None and (not titre.strip() or len(titre) > 256)) or (description is not None and len(description) > 1000):
+        await interaction.response.send_message("Titre : 1 à 256 caractères ; description : 1000 caractères maximum.", ephemeral=True)
+        return
+    if image is not None and retirer_image:
+        await interaction.response.send_message("Choisissez une image ou son retrait, pas les deux.", ephemeral=True)
+        return
+    if image is not None or retirer_image:
+        if not await save_ticket_image(interaction, "panel", image, notify=False):
+            return
+    settings = get_ticket_settings(interaction.guild.id)
+    if titre is not None:
+        settings["panel_title"] = titre
+    if description is not None:
+        settings["panel_description"] = description
+    if titre is not None or description is not None:
+        set_guild_config(interaction.guild.id, "ticket_settings", settings)
     cfg        = get_guild_config(interaction.guild.id)
     ping_roles = [interaction.guild.get_role(rid) for rid in cfg.get("ping_roles", []) if interaction.guild.get_role(rid)]
     log_ch = interaction.guild.get_channel(cfg.get("log_channel_id")) if cfg.get("log_channel_id") else None
@@ -1120,7 +1182,8 @@ async def panel_tickets(interaction: discord.Interaction):
     view = TicketOpenView()
     view.children[0].label = settings["open_button_label"]
     view.children[1].label = settings["info_button_label"]
-    await interaction.response.defer(ephemeral=True)
+    if not interaction.response.is_done():
+        await interaction.response.defer(ephemeral=True)
     await send_ticket_embed(interaction.channel, interaction.guild.id, "panel", settings, embed, view=view)
     await interaction.followup.send(embed=firm1_embed("✅ Panel envoyé !", "Le panel de tickets a été créé.", color=COLOR_SUCCESS, fields=[("📁 Logs", log_ch.mention if log_ch else "❌ Non configuré", True), ("🔔 Rôles", " ".join(r.mention for r in ping_roles) if ping_roles else "❌ Aucun configuré", True)]), ephemeral=True)
 
