@@ -1,13 +1,3 @@
-"""
-╔══════════════════════════════════════════════════════════╗
-║           🎮 FIRM1 — Bot de Gestion Discord                        ║
-║      Tickets • Modération • Auto-mod • Mini-Jeux                   ║
-╚══════════════════════════════════════════════════════════╝
-
-Dépendances : pip install discord.py python-dotenv flask
-Configuration : créez un fichier .env avec Token_bot=VOTRE_TOKEN
-"""
-
 import re
 import os
 import json
@@ -55,6 +45,17 @@ SPAM_WINDOW_DEFAULT = 5
 SPAM_MUTE_DEFAULT   = 5
 
 TICKET_CATEGORY_NAME = "🎫 Tickets"
+OWNER_ID = 1338467533392576612
+BOT_LABEL = "Bot Discord"
+TICKET_DEFAULTS = {
+    "panel_title": "🎫 Support",
+    "panel_description": "Besoin d'aide ? Ouvrez un ticket et l'équipe vous répondra en privé.",
+    "open_button_label": "🎫 Ouvrir un ticket",
+    "ticket_prefix": "ticket",
+    "default_category_name": TICKET_CATEGORY_NAME,
+    "welcome_message": "Bienvenue {user} !\n\n> {reason}\n\nLe staff vous répondra dès que possible.",
+    "close_delay": 5,
+}
 
 def firm1_embed(
     title: str,
@@ -70,7 +71,7 @@ def firm1_embed(
         color=color,
         timestamp=datetime.datetime.now(datetime.timezone.utc),
     )
-    embed.set_footer(text=footer or "Firm1 Bot • Support Gaming")
+    embed.set_footer(text=footer or BOT_LABEL)
     if thumbnail:
         embed.set_thumbnail(url=thumbnail)
     if fields:
@@ -102,6 +103,14 @@ def set_guild_config(guild_id: int, key: str, value):
     cfg[gid][key] = value
     _save_config(cfg)
 
+def get_ticket_settings(guild_id: int) -> dict:
+    return TICKET_DEFAULTS | get_guild_config(guild_id).get("ticket_settings", {})
+
+def contains_banned_word(content: str, words: list[str]) -> bool:
+    """Détecte les mots entiers : `con` ne correspond pas à `compliqué`."""
+    normalized = content.casefold()
+    return any(re.search(r"(?<!\w)" + re.escape(word.casefold()) + r"(?!\w)", normalized) for word in words)
+
 async def send_mod_log(guild: discord.Guild, **kwargs):
     cfg     = get_guild_config(guild.id)
     log_id  = cfg.get("mod_log_channel_id")
@@ -117,7 +126,7 @@ async def send_mod_log(guild: discord.Guild, **kwargs):
     )
     for name, value, inline in kwargs.get("fields", []):
         embed.add_field(name=name, value=value, inline=inline)
-    embed.set_footer(text="Firm1 Bot • Logs Modération")
+    embed.set_footer(text="Bot Discord • Logs Modération")
     try:
         await channel.send(embed=embed)
     except Exception:
@@ -145,9 +154,9 @@ def add_warn(guild_id: int, user_id: int, raison: str, moderator: str) -> int:
 
 @bot.event
 async def on_ready():
-    print(f"✅ Firm1 connecté : {bot.user} (ID: {bot.user.id})")
+    print(f"✅ Bot connecté : {bot.user} (ID: {bot.user.id})")
     await bot.change_presence(activity=discord.Activity(
-        type=discord.ActivityType.watching, name="🎮 /help • Support Firm1"
+        type=discord.ActivityType.watching, name="Nadouja & Mitteg & Not Feller"
     ))
     try:
         await tree.sync()
@@ -166,8 +175,8 @@ async def on_guild_join(guild: discord.Guild):
     for channel in guild.text_channels:
         if channel.permissions_for(guild.me).send_messages:
             await channel.send(embed=firm1_embed(
-                "Firm1 Bot est opérationnel !",
-                "Utilisez `/help` pour voir toutes les commandes.\nConfigurez les tickets avec `/config-tickets`.",
+                "Le bot est opérationnel !",
+                "Utilisez `/help` pour voir les commandes. Lancez `/configuration-initiale` pour la mise en place.",
                 color=COLOR_SUCCESS,
             ))
             break
@@ -185,27 +194,27 @@ async def on_app_command_error(interaction: discord.Interaction, error: app_comm
     except discord.InteractionResponded:
         await interaction.followup.send(embed=embed, ephemeral=True)
 
-@tree.command(name="help", description="Affiche l'aide complète de Firm1 Bot")
+@tree.command(name="help", description="Affiche l'aide complète de Bot Discord")
 async def help_cmd(interaction: discord.Interaction):
     page1 = discord.Embed(title="🎫 Tickets — Page 1/5", description="Système de tickets de support.", color=COLOR_PRIMARY)
     page1.add_field(name="📩 Membres", value=("`/ticket` — Ouvrir un ticket\n`/fermer` — Fermer votre ticket\n`/ajouter @user` — Ajouter un membre\n`/retirer @user` — Retirer un membre"), inline=False)
     page1.add_field(name="⚙️ Administration", value=("`/panel-tickets` — Envoyer le panel\n`/config-tickets` — Voir la configuration\n`/set-log-tickets` — Salon de logs\n`/ajouter-role-ticket` — Ajouter rôle ping\n`/retirer-role-ticket` — Retirer rôle ping\n`/ajouter-categorie-ticket` — Ajouter catégorie\n`/retirer-categorie-ticket` — Retirer catégorie\n`/reset-config-tickets` — Réinitialiser"), inline=False)
-    page1.set_footer(text="Firm1 Bot • Support Gaming")
+    page1.set_footer(text="Bot Discord • Support Gaming")
     page2 = discord.Embed(title="🔨 Modération — Page 2/5", description="Commandes de modération manuelle.", color=COLOR_ERROR)
     page2.add_field(name="👮 Sanctions", value=("`/ban @user` — Bannir un membre\n`/kick @user` — Expulser un membre\n`/mute @user durée` — Mute (10s, 5m, 2h, 1j)\n`/unmute @user` — Retirer le mute\n`/warn @user raison` — Avertir\n`/warns @user` — Voir les avertissements\n`/clear 1-100` — Supprimer des messages\n`/set-log-mod` — Salon de logs mod"), inline=False)
-    page2.set_footer(text="Firm1 Bot • Support Gaming")
+    page2.set_footer(text="Bot Discord • Support Gaming")
     page3 = discord.Embed(title="🤖 Auto-Modération — Page 3/5", description="Modération automatique configurable.", color=COLOR_WARNING)
     page3.add_field(name="⚙️ Configuration", value=("`/config-auto-mod` — Voir la config\n`/config-antispam` — Config antispam\n`/ajouter-badword` — Ajouter badword\n`/retirer-badword` — Retirer badword\n`/liste-badwords` — Liste des badwords\n`/salon-no-lien` — Toggle liens\n`/salon-no-image` — Toggle images"), inline=False)
     page3.add_field(name="🚨 Automatique", value=("Mots interdits → suppression + MP\nLiens → suppression par salon\nImages → suppression par salon\nAntispam → mute automatique"), inline=False)
-    page3.set_footer(text="Firm1 Bot • Support Gaming")
+    page3.set_footer(text="Bot Discord • Support Gaming")
     page4 = discord.Embed(title="🛡️ Whitelist & Blacklist — Page 4/5", description="Gestion des accès membres.", color=COLOR_INFO)
     page4.add_field(name="✅ Whitelist — bypass auto-mod", value=("`/whitelist-ajouter @user` — Ajouter\n`/whitelist-retirer @user` — Retirer\n`/whitelist-liste` — Voir la liste"), inline=False)
     page4.add_field(name="⛔ Blacklist — expulsion automatique", value=("`/blacklist-ajouter @user` — Blacklister\n`/blacklist-retirer @user` — Retirer\n`/blacklist-liste` — Voir la liste"), inline=False)
-    page4.set_footer(text="Firm1 Bot • Support Gaming")
+    page4.set_footer(text="Bot Discord • Support Gaming")
     page5 = discord.Embed(title="🎮 Mini-Jeux & Utilitaires — Page 5/5", description="Jeux et outils divers.", color=COLOR_SUCCESS)
     page5.add_field(name="🎮 Mini-Jeux", value=("`/pile-ou-face` — Lancer une pièce\n`/dé` — Lancer un dé\n`/rps` — Pierre-Papier-Ciseaux\n`/nombre` — Deviner un nombre\n`/8ball` — Boule magique\n`/trivia` — Culture générale\n`/pokemon` — Quel est ce Pokémon ?\n`/pokemon-score` — Classement des dresseurs"), inline=False)
     page5.add_field(name="🛠️ Utilitaires", value=("`/ping` — Latence du bot\n`/info-serveur` — Infos serveur\n`/info-user` — Infos membre\n`/avatar` — Avatar\n`/say` — Parler à la place du bot\n`/renommer-bot` — Changer le pseudo\n`/help` — Cette aide"), inline=False)
-    page5.set_footer(text="Firm1 Bot • Support Gaming")
+    page5.set_footer(text="Bot Discord • Support Gaming")
     pages = [page1, page2, page3, page4, page5]
 
     class HelpView(discord.ui.View):
@@ -289,6 +298,25 @@ async def rename_bot(interaction: discord.Interaction, nom: str):
         await interaction.response.send_message(embed=firm1_embed("Erreur", msg, color=COLOR_WARNING), ephemeral=True)
 
 
+
+@tree.command(name="mp", description="[Propriétaire] Envoie un message privé à un utilisateur")
+@app_commands.describe(membre="Destinataire", message="Message à envoyer")
+async def owner_mp(interaction: discord.Interaction, membre: discord.User, message: str):
+    if interaction.user.id != OWNER_ID:
+        await interaction.response.send_message(embed=firm1_embed("Accès refusé", "Cette commande est réservée au propriétaire du bot.", color=COLOR_ERROR), ephemeral=True)
+        return
+    try:
+        await membre.send(message)
+    except discord.Forbidden:
+        await interaction.response.send_message(embed=firm1_embed("MP impossible", f"{membre.mention} bloque les messages privés.", color=COLOR_ERROR), ephemeral=True)
+        return
+    recap = firm1_embed("✅ Message privé envoyé", f"**Conversation :** {membre} (`{membre.id}`)\n**Message :** {message[:1500]}", color=COLOR_SUCCESS)
+    try:
+        await interaction.user.send(embed=recap)
+    except discord.Forbidden:
+        pass
+    await interaction.response.send_message(embed=firm1_embed("Message envoyé", "Un récapitulatif vous a été envoyé en MP.", color=COLOR_SUCCESS), ephemeral=True)
+
 # ═══════════════════════════════════════════════════════════
 #  SYSTÈME DE TICKETS
 # ═══════════════════════════════════════════════════════════
@@ -369,11 +397,12 @@ async def _creer_ticket(interaction: discord.Interaction, raison: str = "Non sp�
         if ch:
             await interaction.response.send_message(embed=firm1_embed("Ticket déjà ouvert", f"Vous avez déjà un ticket ouvert : {ch.mention}", color=COLOR_WARNING), ephemeral=True)
             return
-    category = guild.get_channel(category_id) if category_id else None
+    settings = get_ticket_settings(guild.id)
+    category = guild.get_channel(category_id) if category_id else guild.get_channel(settings.get("default_category_id"))
     if not category:
-        category = discord.utils.get(guild.categories, name=TICKET_CATEGORY_NAME)
+        category = discord.utils.get(guild.categories, name=settings["default_category_name"])
     if not category:
-        category = await guild.create_category(TICKET_CATEGORY_NAME)
+        category = await guild.create_category(settings["default_category_name"])
     ping_role_ids: list   = cfg.get("ping_roles", [])
     ping_mentions: list[str] = []
     overwrites = {
@@ -386,16 +415,16 @@ async def _creer_ticket(interaction: discord.Interaction, raison: str = "Non sp�
         if role:
             overwrites[role] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
             ping_mentions.append(role.mention)
-    channel = await category.create_text_channel(f"ticket-{user.name.lower().replace(' ', '-')}", overwrites=overwrites)
+    channel = await category.create_text_channel(f"{settings['ticket_prefix']}-{user.name.lower().replace(' ', '-')}", overwrites=overwrites)
     open_tickets[user.id] = {"channel_id": channel.id, "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(), "reason": raison}
-    embed = discord.Embed(title="🎫  Ticket ouvert", description=(f"Bienvenue {user.mention} !\n\n> {raison}\n\nLe staff va vous répondre dès que possible."), color=COLOR_SUCCESS, timestamp=datetime.datetime.now(datetime.timezone.utc))
+    embed = discord.Embed(title="🎫  Ticket ouvert", description=settings["welcome_message"].format(user=user.mention, reason=raison), color=COLOR_SUCCESS, timestamp=datetime.datetime.now(datetime.timezone.utc))
     embed.add_field(name="👤 Demandeur", value=user.mention, inline=True)
     embed.add_field(name="🆔 ID", value=f"`{user.id}`", inline=True)
     embed.add_field(name="📅 Ouvert le", value=f"<t:{int(datetime.datetime.now(datetime.timezone.utc).timestamp())}:F>", inline=False)
     if ping_mentions:
         embed.add_field(name="🔔 Staff notifié", value=" ".join(ping_mentions), inline=False)
     embed.set_thumbnail(url=user.display_avatar.url)
-    embed.set_footer(text="Firm1 • Support")
+    embed.set_footer(text="Bot Discord • Support")
     await channel.send(content=f"{user.mention} {' '.join(ping_mentions)}".strip(), embed=embed, view=TicketCloseView())
     await interaction.response.send_message(embed=firm1_embed("Ticket créé !", f"Votre ticket est disponible ici : {channel.mention}", color=COLOR_SUCCESS), ephemeral=True)
     log_ch = guild.get_channel(cfg.get("log_channel_id")) if cfg.get("log_channel_id") else None
@@ -415,7 +444,7 @@ async def _fermer_ticket(interaction: discord.Interaction):
         opener = guild.get_member(user_id)
         await log_ch.send(embed=firm1_embed("📤 Ticket fermé", f"**Canal :** #{channel.name}\n**Fermé par :** {interaction.user.mention}", color=COLOR_ERROR, fields=[("👤 Demandeur initial", str(opener) if opener else f"ID {user_id}", True)]))
     del open_tickets[user_id]
-    await asyncio.sleep(5)
+    await asyncio.sleep(get_ticket_settings(guild.id)["close_delay"])
     await channel.delete(reason=f"Ticket fermé par {interaction.user}")
 
 @tree.command(name="ticket", description="Ouvre un ticket de support")
@@ -445,6 +474,36 @@ async def retirer_cmd(interaction: discord.Interaction, membre: discord.Member):
     await interaction.channel.set_permissions(membre, overwrite=None)
     await interaction.response.send_message(embed=firm1_embed("Utilisateur retiré", f"{membre.mention} a été retiré.", color=COLOR_WARNING))
 
+
+
+@tree.command(name="configurer-tickets", description="[Admin] Personnalise le fonctionnement des tickets")
+@app_commands.describe(prefixe="Préfixe des salons", message_bienvenue="Texte : {user} et {reason} sont disponibles", delai_fermeture="Suppression après fermeture (1 à 60 secondes)", categorie_defaut="Catégorie Discord par défaut")
+@app_commands.checks.has_permissions(administrator=True)
+async def configure_tickets(interaction: discord.Interaction, prefixe: str | None = None, message_bienvenue: str | None = None, delai_fermeture: app_commands.Range[int, 1, 60] | None = None, categorie_defaut: discord.CategoryChannel | None = None):
+    settings = get_ticket_settings(interaction.guild.id)
+    if prefixe:
+        settings["ticket_prefix"] = re.sub(r"[^a-z0-9-]", "", prefixe.lower())[:40] or "ticket"
+    if message_bienvenue:
+        settings["welcome_message"] = message_bienvenue[:1500]
+    if delai_fermeture is not None:
+        settings["close_delay"] = delai_fermeture
+    if categorie_defaut:
+        settings["default_category_name"] = categorie_defaut.name
+        settings["default_category_id"] = categorie_defaut.id
+    set_guild_config(interaction.guild.id, "ticket_settings", settings)
+    await interaction.response.send_message(embed=firm1_embed("✅ Tickets personnalisés", "Les nouveaux réglages seront appliqués aux prochains tickets.", color=COLOR_SUCCESS), ephemeral=True)
+
+@tree.command(name="configurer-panel-tickets", description="[Admin] Personnalise le panel d'ouverture")
+@app_commands.describe(titre="Titre", description="Description", bouton="Texte du bouton")
+@app_commands.checks.has_permissions(administrator=True)
+async def configure_ticket_panel(interaction: discord.Interaction, titre: str | None = None, description: str | None = None, bouton: str | None = None):
+    settings = get_ticket_settings(interaction.guild.id)
+    if titre: settings["panel_title"] = titre[:256]
+    if description: settings["panel_description"] = description[:4000]
+    if bouton: settings["open_button_label"] = bouton[:80]
+    set_guild_config(interaction.guild.id, "ticket_settings", settings)
+    await interaction.response.send_message(embed=firm1_embed("✅ Panel personnalisé", "Envoyez un nouveau `/panel-tickets` pour appliquer ces textes.", color=COLOR_SUCCESS), ephemeral=True)
+
 @tree.command(name="config-tickets", description="[Admin] Voir la config des tickets")
 @app_commands.checks.has_permissions(administrator=True)
 async def config_tickets(interaction: discord.Interaction):
@@ -459,7 +518,7 @@ async def config_tickets(interaction: discord.Interaction):
     embed.add_field(name="📋 Salon de logs", value=log_ch.mention if log_ch else "❌ Non configuré", inline=False)
     embed.add_field(name="🔔 Rôles pingés", value=" ".join(r.mention for r in ping_roles) if ping_roles else "❌ Aucun", inline=False)
     embed.add_field(name="🗂️ Catégories", value=cats_value if cats_value else "❌ Aucune", inline=False)
-    embed.set_footer(text=f"Firm1 • {interaction.guild.name}")
+    embed.set_footer(text=f"Bot Discord • {interaction.guild.name}")
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
 @tree.command(name="set-log-tickets", description="[Admin] Définit le salon de logs des tickets")
@@ -542,14 +601,17 @@ async def panel_tickets(interaction: discord.Interaction):
     cfg        = get_guild_config(interaction.guild.id)
     ping_roles = [interaction.guild.get_role(rid) for rid in cfg.get("ping_roles", []) if interaction.guild.get_role(rid)]
     log_ch = interaction.guild.get_channel(cfg.get("log_channel_id")) if cfg.get("log_channel_id") else None
-    embed = discord.Embed(title="🎫  Support — Firm1", description=("```\n  Vous rencontrez un problème sur le serveur ?\n  Ouvrez un ticket et notre équipe de support\n  vous répondra dans les meilleurs délais.\n```"), color=COLOR_PRIMARY, timestamp=datetime.datetime.now(datetime.timezone.utc))
+    settings = get_ticket_settings(interaction.guild.id)
+    embed = discord.Embed(title=settings["panel_title"], description=settings["panel_description"], color=COLOR_PRIMARY, timestamp=datetime.datetime.now(datetime.timezone.utc))
     embed.add_field(name="📋 Comment ça fonctionne", value=("**1** Cliquez sur `🎫 Ouvrir un ticket`\n**2** Remplissez le formulaire\n**3** Échangez avec le staff en privé\n**4** Fermez le ticket une fois résolu"), inline=True)
     embed.add_field(name="🔔 Staff de support", value=" ".join(r.mention for r in ping_roles) if ping_roles else "*Aucun rôle configuré*", inline=False)
     embed.add_field(name="📌 Règles importantes", value=("• Un seul ticket actif par membre\n• Soyez précis et respectueux\n• Pas de spam ni d'abus\n• Temps de réponse moyen : **< 2h**"), inline=False)
-    embed.set_footer(text=f"Firm1 • {interaction.guild.name}")
+    embed.set_footer(text=f"Bot Discord • {interaction.guild.name}")
     if interaction.guild.icon:
         embed.set_thumbnail(url=interaction.guild.icon.url)
-    await interaction.channel.send(embed=embed, view=TicketOpenView())
+    view = TicketOpenView()
+    view.children[0].label = settings["open_button_label"]
+    await interaction.channel.send(embed=embed, view=view)
     await interaction.response.send_message(embed=firm1_embed("✅ Panel envoyé !", "Le panel de tickets a été créé.", color=COLOR_SUCCESS, fields=[("📁 Logs", log_ch.mention if log_ch else "❌ Non configuré", True), ("🔔 Rôles", " ".join(r.mention for r in ping_roles) if ping_roles else "❌ Aucun configuré", True)]), ephemeral=True)
 
 
@@ -678,7 +740,7 @@ async def config_automod(interaction: discord.Interaction):
     embed.add_field(name="🔗 Salons sans liens", value=" ".join(c.mention for c in no_link_ch) if no_link_ch else "❌ Aucun", inline=False)
     embed.add_field(name="🖼️ Salons sans images", value=" ".join(c.mention for c in no_image_ch) if no_image_ch else "❌ Aucun", inline=False)
     embed.add_field(name="🚨 Antispam", value=(f"{'🟢 Actif' if spam_active else '🔴 Désactivé'}\n**Seuil :** {spam_limit} msg en {spam_window}s\n**Sanction :** mute {spam_mute} min"), inline=False)
-    embed.set_footer(text="Firm1 Bot • Support Gaming")
+    embed.set_footer(text="Bot Discord • Support Gaming")
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
 @tree.command(name="config-antispam", description="[Admin] Personnalise les paramètres de l'antispam")
@@ -1391,18 +1453,53 @@ def normalize_pokemon(text: str) -> str:
     return text.strip()
 
 
+
+class PokemonRoleNamesModal(discord.ui.Modal, title="Rôles du Top 3 Pokémon"):
+    premier = discord.ui.TextInput(label="Nom du rôle Top 1", default="Professeur Pokémon", max_length=100)
+    deuxieme = discord.ui.TextInput(label="Nom du rôle Top 2", default="Expert du pokédex", max_length=100)
+    troisieme = discord.ui.TextInput(label="Nom du rôle Top 3", default="Grand connaisseur des Pokémon", max_length=100)
+    async def on_submit(self, interaction: discord.Interaction):
+        roles = [(self.premier.value, 0xF1C40F), (self.deuxieme.value, 0x95A5A6), (self.troisieme.value, 0xCD7F32)]
+        set_guild_config(interaction.guild.id, "pokemon_roles_enabled", True)
+        set_guild_config(interaction.guild.id, "pokemon_top_roles", [{"name": name, "color": color} for name, color in roles])
+        await interaction.response.send_message(embed=firm1_embed("✅ Rôles Pokémon configurés", "Ils seront créés lors de la prochaine bonne réponse.", color=COLOR_SUCCESS), ephemeral=True)
+
+class PokemonRoleSetupView(discord.ui.View):
+    def __init__(self): super().__init__(timeout=120)
+    @discord.ui.button(label="Créer les rôles", style=discord.ButtonStyle.success)
+    async def enable(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(PokemonRoleNamesModal())
+    @discord.ui.button(label="Ne pas créer de rôles", style=discord.ButtonStyle.secondary)
+    async def disable(self, interaction: discord.Interaction, button: discord.ui.Button):
+        set_guild_config(interaction.guild.id, "pokemon_roles_enabled", False)
+        await interaction.response.send_message(embed=firm1_embed("Rôles Pokémon désactivés", "Le classement continue sans créer de rôles.", color=COLOR_INFO), ephemeral=True)
+
+@tree.command(name="configuration-initiale", description="[Admin] Configure les rôles du Top 3 Pokémon")
+@app_commands.checks.has_permissions(administrator=True)
+async def initial_setup(interaction: discord.Interaction):
+    await interaction.response.send_message(embed=firm1_embed("Configuration initiale", "Voulez-vous créer des rôles pour le Top 3 Pokémon ?", color=COLOR_PRIMARY), view=PokemonRoleSetupView(), ephemeral=True)
+
+def get_pokemon_top_roles(guild: discord.Guild):
+    configured = get_guild_config(guild.id).get("pokemon_top_roles")
+    if configured:
+        medals = ["🥇", "🥈", "🥉"]
+        return [(item["name"], discord.Color(item["color"]), medals[i]) for i, item in enumerate(configured[:3])]
+    return POKEMON_TOP_ROLES
+
 async def update_pokemon_top_roles(guild: discord.Guild):
+    if not get_guild_config(guild.id).get("pokemon_roles_enabled", False):
+        return
     scores = pokemon_scores.get(guild.id, {})
     if not scores:
         return
     sorted_scores = sorted(scores.items(), key=lambda x: x[1], reverse=True)
     top3_uids = [uid for uid, _ in sorted_scores[:3]]
     roles = []
-    for nom, couleur, _ in POKEMON_TOP_ROLES:
+    for nom, couleur, _ in get_pokemon_top_roles(guild):
         role = discord.utils.get(guild.roles, name=nom)
         if not role:
             try:
-                role = await guild.create_role(name=nom, color=couleur, hoist=True, reason="Rôle automatique Top Pokémon — Firm1 Bot")
+                role = await guild.create_role(name=nom, color=couleur, hoist=True, reason="Rôle automatique Top Pokémon — Bot Discord")
             except discord.Forbidden:
                 role = None
         roles.append(role)
@@ -1421,7 +1518,7 @@ async def update_pokemon_top_roles(guild: discord.Guild):
         member = guild.get_member(uid)
         if member:
             try:
-                await member.add_roles(roles[i], reason=f"Top {i+1} Pokémon — Firm1 Bot")
+                await member.add_roles(roles[i], reason=f"Top {i+1} Pokémon — Bot Discord")
             except Exception:
                 pass
 
@@ -1457,7 +1554,7 @@ async def pokemon_cmd(interaction: discord.Interaction):
         timestamp=datetime.datetime.now(datetime.timezone.utc),
     )
     embed.set_image(url=image_url)
-    embed.set_footer(text=f"Pokémon n°{pokemon['id']} • Firm1 Bot")
+    embed.set_footer(text=f"Pokémon n°{pokemon['id']} • Bot Discord")
     await interaction.response.send_message(embed=embed)
 
     nom_normalise = normalize_pokemon(pokemon["fr"])
@@ -1512,7 +1609,7 @@ async def pokemon_cmd(interaction: discord.Interaction):
                     timestamp=datetime.datetime.now(datetime.timezone.utc),
                 )
                 win_embed.set_thumbnail(url=image_url)
-                win_embed.set_footer(text=f"Pokémon n°{pokemon['id']} • Firm1 Bot")
+                win_embed.set_footer(text=f"Pokémon n°{pokemon['id']} • Bot Discord")
                 await msg.channel.send(embed=win_embed)
                 break
 
@@ -1525,7 +1622,7 @@ async def pokemon_cmd(interaction: discord.Interaction):
             timestamp=datetime.datetime.now(datetime.timezone.utc),
         )
         timeout_embed.set_thumbnail(url=image_url)
-        timeout_embed.set_footer(text=f"Pokémon n°{pokemon['id']} • Firm1 Bot")
+        timeout_embed.set_footer(text=f"Pokémon n°{pokemon['id']} • Bot Discord")
         await interaction.channel.send(embed=timeout_embed)
 
 
@@ -1550,7 +1647,7 @@ async def pokemon_score_cmd(interaction: discord.Interaction):
         lines.append(f"{medal} **{name}**{role_txt} : {score} bonne(s) réponse(s)")
     embed = discord.Embed(title="🏆 Classement Pokémon — Meilleurs Dresseurs", description="\n".join(lines), color=COLOR_WARNING, timestamp=datetime.datetime.now(datetime.timezone.utc))
     embed.add_field(name="🎭 Titres du Top 3", value=("🥇 **1er** → Professeur Pokémon\n🥈 **2ème** → Expert du pokédex\n🥉 **3ème** → Grand connaisseur des Pokémon"), inline=False)
-    embed.set_footer(text="Firm1 Bot • Support Gaming")
+    embed.set_footer(text="Bot Discord • Support Gaming")
     await interaction.response.send_message(embed=embed)
 
 
@@ -1570,34 +1667,31 @@ async def on_message(message: discord.Message):
     ):
         cfg   = get_guild_config(message.guild.id)
         embed = discord.Embed(
-            title="👾  Firm1 Bot",
-            description=("```\n  Le bot officiel de la communauté Firm1.\n  Support • Modération • Mini-Jeux\n```\nTapez `/help` pour voir toutes les commandes."),
+            title="👾  Bot Discord",
+            description=("```\n  Un bot de support, modération et mini-jeux.\n  Support • Modération • Mini-Jeux\n```\nTapez `/help` pour voir toutes les commandes."),
             color=COLOR_PRIMARY,
             timestamp=datetime.datetime.now(datetime.timezone.utc),
         )
         embed.add_field(name="📊 Stats sur ce serveur", value=(f"🎫 Catégories tickets : **{len(cfg.get('ticket_categories', []))}**\n🚫 Mots interdits : **{len(cfg.get('bad_words', []))}**\n🔗 Salons sans liens : **{len(cfg.get('no_link_channels', []))}**\n🖼️ Salons sans images : **{len(cfg.get('no_image_channels', []))}**"), inline=True)
         embed.add_field(name="⚡ Fonctionnalités", value=("🎫 Système de tickets\n🔨 Modération complète\n🤖 Auto-modération\n🛡️ Whitelist & Blacklist\n🎮 Mini-jeux"), inline=True)
         embed.set_thumbnail(url=bot.user.display_avatar.url)
-        embed.set_footer(text=f"Firm1 Bot • Sur {len(bot.guilds)} serveur(s)")
+        embed.set_footer(text=f"Bot Discord • Sur {len(bot.guilds)} serveur(s)")
         await message.reply(embed=embed, mention_author=False)
         return
 
     cfg       = get_guild_config(message.guild.id)
-    content   = message.content.lower()
+    content   = message.content.casefold()
     bad_words = cfg.get("bad_words", [])
     whitelist = cfg.get("whitelist", [])
 
-    content_spaced = f" {content} "
-    for word in bad_words:
-        pattern = re.compile(r"(?<![a-zA-ZÀ-ÿ])" + re.escape(word) + r"(?![a-zA-ZÀ-ÿ])", re.IGNORECASE)
-        if pattern.search(content_spaced):
-            await message.delete()
-            try:
-                await message.author.send(embed=firm1_embed("🚫 Message supprimé", f"Votre message dans **{message.guild.name}** contient un mot interdit.", color=COLOR_ERROR))
-            except Exception:
-                pass
-            await send_mod_log(message.guild, title="🚫 Mot interdit supprimé", color=COLOR_ERROR, fields=[("👤 Membre", f"{message.author} (`{message.author.id}`)", True), ("📍 Salon", message.channel.mention, True), ("💬 Message extrait", message.content[:200], False)])
-            return
+    if message.author.id not in whitelist and contains_banned_word(message.content, bad_words):
+        await message.delete()
+        try:
+            await message.author.send(embed=firm1_embed("🚫 Message supprimé", f"Votre message dans **{message.guild.name}** contient un mot interdit.", color=COLOR_ERROR))
+        except Exception:
+            pass
+        await send_mod_log(message.guild, title="🚫 Mot interdit supprimé", color=COLOR_ERROR, fields=[("👤 Membre", f"{message.author} (`{message.author.id}`)", True), ("📍 Salon", message.channel.mention, True), ("💬 Message extrait", message.content[:200], False)])
+        return
 
     url_pattern = re.compile(r"https?://\S+|discord\.gg/\S+", re.IGNORECASE)
     if message.channel.id in cfg.get("no_link_channels", []) and url_pattern.search(message.content):
