@@ -247,8 +247,8 @@ async def help_cmd(interaction: discord.Interaction):
     ])
     page("Organisation des tickets", "⚙️", "Administration · Une destination et des rôles propres à chaque type.", COLOR_INFO, [
         ("Tout configurer", "`/config-tickets` — types, rôles à notifier, catégorie Discord, textes et boutons.\nChaque type peut avoir ses propres rôles, emoji et bannière."),
-        ("Types et destinations", "`/ajouter-categorie-ticket` — ajouter un type et sa catégorie Discord.\n`/retirer-categorie-ticket` — supprimer un type."),
-        ("Rôles par défaut", "`/ajouter-role-ticket` — ajouter un rôle par défaut.\n`/retirer-role-ticket` — retirer un rôle par défaut.\nLes rôles propres à un type se règlent dans `/config-tickets`."),
+        ("Types et destinations", "Dans `/config-tickets` → **Types de tickets** : ajouter ou supprimer un type, choisir sa catégorie et ses rôles."),
+        ("Rôles par défaut", "Dans `/config-tickets` → **Rôles et catégorie par défaut** : sélectionner les rôles à notifier et la destination."),
         ("Suivi et remise à zéro", "`/set-log-tickets` — choisir le salon de suivi.\n`/reset-config-tickets` — réinitialiser la configuration enregistrée du serveur."),
     ])
     page("Modération", "🔨", "Les actions nécessitent les permissions correspondantes.", COLOR_ERROR, [
@@ -1140,62 +1140,9 @@ async def set_log_tickets(interaction: discord.Interaction, salon: discord.TextC
     set_guild_config(interaction.guild.id, "log_channel_id", salon.id)
     await interaction.response.send_message(embed=firm1_embed("✅ Salon de logs tickets configuré", f"Logs envoyés dans {salon.mention}.", color=COLOR_SUCCESS), ephemeral=True)
 
-@tree.command(name="ajouter-role-ticket", description="[Admin] Ajoute un rôle à pinger lors d'un ticket")
-@app_commands.describe(role="Le rôle à ajouter")
-@app_commands.checks.has_permissions(administrator=True)
-async def add_ping_role(interaction: discord.Interaction, role: discord.Role):
-    cfg      = get_guild_config(interaction.guild.id)
-    ping_ids = cfg.get("ping_roles", [])
-    if role.id in ping_ids:
-        await interaction.response.send_message(embed=firm1_embed("Déjà présent", f"{role.mention} est déjà dans la liste.", color=COLOR_WARNING), ephemeral=True)
-        return
-    ping_ids.append(role.id)
-    set_guild_config(interaction.guild.id, "ping_roles", ping_ids)
-    all_roles = [interaction.guild.get_role(rid) for rid in ping_ids if interaction.guild.get_role(rid)]
-    await interaction.response.send_message(embed=firm1_embed("✅ Rôle ping ajouté", f"{role.mention} sera pingé à chaque ticket.", color=COLOR_SUCCESS, fields=[("🔔 Liste complète", " ".join(r.mention for r in all_roles), False)]), ephemeral=True)
 
-@tree.command(name="retirer-role-ticket", description="[Admin] Retire un rôle de la liste des pings tickets")
-@app_commands.describe(role="Le rôle à retirer")
-@app_commands.checks.has_permissions(administrator=True)
-async def remove_ping_role(interaction: discord.Interaction, role: discord.Role):
-    cfg      = get_guild_config(interaction.guild.id)
-    ping_ids = cfg.get("ping_roles", [])
-    if role.id not in ping_ids:
-        await interaction.response.send_message(embed=firm1_embed("Introuvable", f"{role.mention} n'est pas dans la liste.", color=COLOR_WARNING), ephemeral=True)
-        return
-    ping_ids.remove(role.id)
-    set_guild_config(interaction.guild.id, "ping_roles", ping_ids)
-    all_roles = [interaction.guild.get_role(rid) for rid in ping_ids if interaction.guild.get_role(rid)]
-    await interaction.response.send_message(embed=firm1_embed("✅ Rôle ping retiré", f"{role.mention} ne sera plus pingé.", color=COLOR_SUCCESS, fields=[("🔔 Liste restante", " ".join(r.mention for r in all_roles) if all_roles else "Aucun", False)]), ephemeral=True)
 
-@tree.command(name="ajouter-categorie-ticket", description="[Admin] Ajoute une catégorie de ticket")
-@app_commands.describe(label="Nom affiché", categorie_discord="Catégorie Discord cible", description="Description courte (optionnel)", emoji="Emoji (optionnel)")
-@app_commands.checks.has_permissions(administrator=True)
-async def add_ticket_category(interaction: discord.Interaction, label: str, categorie_discord: discord.CategoryChannel, description: str = "", emoji: str = "🎫"):
-    cfg        = get_guild_config(interaction.guild.id)
-    categories = cfg.get("ticket_categories", [])
-    if any(c["label"].lower() == label.lower() for c in categories):
-        await interaction.response.send_message(embed=firm1_embed("Déjà existant", f"**{label}** existe déjà.", color=COLOR_WARNING), ephemeral=True)
-        return
-    if len(categories) >= 25:
-        await interaction.response.send_message(embed=firm1_embed("Limite atteinte", "Maximum 25 catégories.", color=COLOR_ERROR), ephemeral=True)
-        return
-    categories.append({"label": label, "description": description, "emoji": emoji, "discord_category_id": categorie_discord.id})
-    set_guild_config(interaction.guild.id, "ticket_categories", categories)
-    await interaction.response.send_message(embed=firm1_embed("✅ Catégorie ajoutée", f"{emoji} **{label}** → {categorie_discord.mention}", color=COLOR_SUCCESS, fields=[("Total", str(len(categories)), True)]), ephemeral=True)
 
-@tree.command(name="retirer-categorie-ticket", description="[Admin] Supprime une catégorie de ticket")
-@app_commands.describe(label="Nom exact de la catégorie à supprimer")
-@app_commands.checks.has_permissions(administrator=True)
-async def remove_ticket_category(interaction: discord.Interaction, label: str):
-    cfg        = get_guild_config(interaction.guild.id)
-    categories = cfg.get("ticket_categories", [])
-    new_cats   = [c for c in categories if c["label"].lower() != label.lower()]
-    if len(new_cats) == len(categories):
-        await interaction.response.send_message(embed=firm1_embed("Introuvable", f"Aucune catégorie **{label}**.", color=COLOR_WARNING), ephemeral=True)
-        return
-    set_guild_config(interaction.guild.id, "ticket_categories", new_cats)
-    await interaction.response.send_message(embed=firm1_embed("✅ Catégorie supprimée", f"**{label}** retirée.", color=COLOR_SUCCESS, fields=[("Restantes", str(len(new_cats)), True)]), ephemeral=True)
 
 @tree.command(name="reset-config-tickets", description="[Admin] Remet la config tickets par défaut")
 @app_commands.checks.has_permissions(administrator=True)
