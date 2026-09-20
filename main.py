@@ -55,12 +55,12 @@ TICKET_DEFAULTS = {
     "open_button_label": "🎫 Ouvrir un ticket",
     "info_button_label": "📖 Informations",
     "info_message": "Un seul ticket peut être ouvert à la fois. Choisissez la bonne catégorie et décrivez votre demande.",
-    "panel_step_one": "Sélectionnez une catégorie, puis décrivez votre besoin dans le formulaire.",
-    "panel_step_two": "Un salon visible uniquement par vous et le personnel concerné sera créé.",
-    "panel_rules": "• Un ticket actif par membre\n• Soyez précis et respectueux\n• Fermez le ticket une fois votre demande résolue",
-    "panel_staff_title": "Équipe notifiée",
-    "ticket_open_title": "🎫 Votre demande est prise en charge",
-    "ticket_next_step": "Expliquez toute information utile ici ; le personnel vous répondra dès que possible.",
+    "panel_step_one": "",
+    "panel_step_two": "",
+    "panel_rules": "",
+    "panel_staff_title": "",
+    "ticket_open_title": "🎫 Votre ticket",
+    "ticket_next_step": "",
     "close_button_label": "🔒 Fermer le ticket",
     "ticket_prefix": "ticket",
     "default_category_name": TICKET_CATEGORY_NAME,
@@ -195,7 +195,7 @@ async def on_guild_join(guild: discord.Guild):
         if channel.permissions_for(guild.me).send_messages:
             await channel.send(embed=firm1_embed(
                 "Le bot est opérationnel !",
-                "Utilisez `/help` pour voir les commandes. Lancez `/configuration-initiale` pour la mise en place.",
+                "Utilisez `/help` pour voir les commandes. Utilisez `/pokemon` pour configurer les rôles du classement.",
                 color=COLOR_SUCCESS,
             ))
             break
@@ -423,7 +423,8 @@ class TicketOpenView(discord.ui.View):
             await interaction.response.send_message(embed=firm1_embed("Choisissez une catégorie", "Sélectionnez la catégorie correspondant à votre demande.", color=COLOR_INFO), view=TicketCategoryView(categories), ephemeral=True)
     @discord.ui.button(label="📖 Comment ça marche ?", style=discord.ButtonStyle.secondary, custom_id="ticket_info_btn")
     async def info_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message(embed=firm1_embed("Comment ouvrir un ticket ?", ("**1.** Cliquez sur **🎫 Ouvrir un ticket**\n**2.** Choisissez la catégorie\n**3.** Remplissez le formulaire\n**4.** Un salon privé sera créé\n**5.** Le staff vous répondra dès que possible\n\n⚠️ *Un seul ticket actif par utilisateur.*"), color=COLOR_INFO), ephemeral=True)
+        settings = get_ticket_settings(interaction.guild.id)
+        await interaction.response.send_message(embed=firm1_embed(settings["info_button_label"], settings["info_message"], color=COLOR_INFO), ephemeral=True)
 
 async def _creer_ticket(interaction: discord.Interaction, raison: str = "Non spécifiée", category_id: int | None = None):
     guild, user = interaction.guild, interaction.user
@@ -453,20 +454,13 @@ async def _creer_ticket(interaction: discord.Interaction, raison: str = "Non sp�
             ping_mentions.append(role.mention)
     channel = await category.create_text_channel(f"{settings['ticket_prefix']}-{user.name.lower().replace(' ', '-')}", overwrites=overwrites)
     open_tickets[user.id] = {"channel_id": channel.id, "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(), "reason": raison}
-    embed = bot_embed(
+    embed = discord.Embed(
         title=settings["ticket_open_title"],
-        description=settings["welcome_message"].format(user=user.mention, reason=raison),
+        description=settings["welcome_message"].replace("{user}", user.mention).replace("{reason}", raison),
         color=COLOR_SUCCESS,
-        timestamp=datetime.datetime.now(datetime.timezone.utc),
     )
-    embed.add_field(name="Demandeur", value=user.mention, inline=True)
-    embed.add_field(name="Référence", value=f"`{user.id}`", inline=True)
-    embed.add_field(name="Ouvert le", value=f"<t:{int(datetime.datetime.now(datetime.timezone.utc).timestamp())}:F>", inline=False)
-    embed.add_field(name="Prochaine étape", value=settings["ticket_next_step"], inline=False)
-    if ping_mentions:
-        embed.add_field(name="🔔 Staff notifié", value=" ".join(ping_mentions), inline=False)
-    embed.set_thumbnail(url=user.display_avatar.url)
-    embed.set_footer(text="Nadouja · Mitteg · Not Feller")
+    if settings["ticket_next_step"].strip():
+        embed.add_field(name="Prochaine étape", value=settings["ticket_next_step"], inline=False)
     close_view = TicketCloseView()
     close_view.children[0].label = settings["close_button_label"]
     await channel.send(content=f"{user.mention} {' '.join(ping_mentions)}".strip(), embed=embed, view=close_view)
@@ -553,10 +547,10 @@ class TicketPanelModal(discord.ui.Modal, title="Panel d'ouverture"):
         await interaction.response.send_message(embed=firm1_embed("✅ Design enregistré", "Envoyez `/panel-tickets` pour publier la nouvelle version.", color=COLOR_SUCCESS), ephemeral=True)
 
 class TicketPanelDetailsModal(discord.ui.Modal, title="Informations du panel"):
-    etape_un = discord.ui.TextInput(label="Étape 1", style=discord.TextStyle.paragraph, max_length=300)
-    etape_deux = discord.ui.TextInput(label="Étape 2", style=discord.TextStyle.paragraph, max_length=300)
-    regles = discord.ui.TextInput(label="Règles", style=discord.TextStyle.paragraph, max_length=600)
-    staff = discord.ui.TextInput(label="Titre de l'équipe notifiée", max_length=100)
+    etape_un = discord.ui.TextInput(label="Étape 1 (vide = masquée)", style=discord.TextStyle.paragraph, required=False, max_length=300)
+    etape_deux = discord.ui.TextInput(label="Étape 2 (vide = masquée)", style=discord.TextStyle.paragraph, required=False, max_length=300)
+    regles = discord.ui.TextInput(label="Règles (vide = masquées)", style=discord.TextStyle.paragraph, required=False, max_length=600)
+    staff = discord.ui.TextInput(label="Équipe notifiée (vide = masquée)", required=False, max_length=100)
     def __init__(self, guild_id: int):
         super().__init__()
         self.guild_id = guild_id
@@ -572,7 +566,7 @@ class TicketPanelDetailsModal(discord.ui.Modal, title="Informations du panel"):
 class TicketOpenedModal(discord.ui.Modal, title="Message du ticket créé"):
     titre = discord.ui.TextInput(label="Titre", max_length=256)
     bienvenue = discord.ui.TextInput(label="Message ({user} et {reason} disponibles)", style=discord.TextStyle.paragraph, max_length=1500)
-    prochaine_etape = discord.ui.TextInput(label="Prochaine étape", style=discord.TextStyle.paragraph, max_length=600)
+    prochaine_etape = discord.ui.TextInput(label="Prochaine étape (vide = masquée)", style=discord.TextStyle.paragraph, required=False, max_length=600)
     fermer = discord.ui.TextInput(label="Bouton de fermeture", max_length=80)
     def __init__(self, guild_id: int):
         super().__init__()
@@ -643,7 +637,7 @@ class TicketConfigView(discord.ui.View):
 
 def ticket_config_embed(guild: discord.Guild) -> discord.Embed:
     settings = get_ticket_settings(guild.id)
-    embed = bot_embed(title="Configuration des tickets", description="Utilisez les boutons ci-dessous pour modifier chaque texte affiché aux membres.", color=COLOR_PRIMARY, timestamp=datetime.datetime.now(datetime.timezone.utc))
+    embed = bot_embed(title="Configuration des tickets", description="Personnalisez les messages avec les boutons. Dans Informations et Ticket créé, videz les détails facultatifs pour les masquer.", color=COLOR_PRIMARY, timestamp=datetime.datetime.now(datetime.timezone.utc))
     embed.add_field(name="Panel d'ouverture", value=f"**{settings['panel_title']}**\nBouton : {settings['open_button_label']}", inline=False)
     embed.add_field(name="Ticket créé", value=f"**{settings['ticket_open_title']}**\nFermeture : {settings['close_button_label']}", inline=False)
     embed.add_field(name="Options avancées", value="Préfixe, délai et texte Informations : bouton **Options**.", inline=False)
@@ -736,36 +730,20 @@ async def panel_tickets(interaction: discord.Interaction):
     ping_roles = [interaction.guild.get_role(rid) for rid in cfg.get("ping_roles", []) if interaction.guild.get_role(rid)]
     log_ch = interaction.guild.get_channel(cfg.get("log_channel_id")) if cfg.get("log_channel_id") else None
     settings = get_ticket_settings(interaction.guild.id)
-    embed = bot_embed(
+    embed = discord.Embed(
         title=settings["panel_title"],
-        description=(
-            f"{settings['panel_description']}\n\n"
-            "**Un espace privé et confidentiel sera créé pour votre demande.**"
-        ),
+        description=settings["panel_description"],
         color=settings.get("panel_color", COLOR_PRIMARY),
-        timestamp=datetime.datetime.now(datetime.timezone.utc),
     )
-    embed.add_field(
-        name="✦ Comment ouvrir une demande",
-        value=f"**1.** {settings['panel_step_one']}\n**2.** {settings['panel_step_two']}",
-        inline=False,
-    )
-    embed.add_field(name="✦ Bonnes pratiques", value=settings["panel_rules"], inline=True)
-    embed.add_field(
-        name=f"✦ {settings['panel_staff_title']}",
-        value=" ".join(r.mention for r in ping_roles) if ping_roles else "Équipe non configurée",
-        inline=True,
-    )
-    embed.add_field(
-        name="✦ Confidentialité",
-        value="Votre ticket est visible uniquement par vous et les membres autorisés.",
-        inline=False,
-    )
-    embed.set_footer(text=f"Assistance · {interaction.guild.name}")
+    steps = [settings[key].strip() for key in ("panel_step_one", "panel_step_two") if settings[key].strip()]
+    if steps:
+        embed.add_field(name="Comment ouvrir une demande", value="\n".join(f"**{i}.** {step}" for i, step in enumerate(steps, 1)), inline=False)
+    if settings["panel_rules"].strip():
+        embed.add_field(name="Bonnes pratiques", value=settings["panel_rules"], inline=False)
+    if settings["panel_staff_title"].strip() and ping_roles:
+        embed.add_field(name=settings["panel_staff_title"], value=" ".join(r.mention for r in ping_roles), inline=False)
     if settings.get("panel_image_url"):
         embed.set_image(url=settings["panel_image_url"])
-    elif interaction.guild.icon:
-        embed.set_thumbnail(url=interaction.guild.icon.url)
     view = TicketOpenView()
     view.children[0].label = settings["open_button_label"]
     view.children[1].label = settings["info_button_label"]
@@ -1617,7 +1595,8 @@ class PokemonRoleNamesModal(discord.ui.Modal, title="Rôles du Top 3 Pokémon"):
         roles = [(self.premier.value, 0xF1C40F), (self.deuxieme.value, 0x95A5A6), (self.troisieme.value, 0xCD7F32)]
         set_guild_config(interaction.guild.id, "pokemon_roles_enabled", True)
         set_guild_config(interaction.guild.id, "pokemon_top_roles", [{"name": name, "color": color} for name, color in roles])
-        await interaction.response.send_message(embed=firm1_embed("✅ Rôles Pokémon configurés", "Ils seront créés lors de la prochaine bonne réponse.", color=COLOR_SUCCESS), ephemeral=True)
+        set_guild_config(interaction.guild.id, "pokemon_roles_configured", True)
+        await interaction.response.send_message(embed=firm1_embed("✅ Rôles Pokémon configurés", "Ils seront créés lors de la prochaine bonne réponse. Utilisez à nouveau `/pokemon` pour lancer une partie.", color=COLOR_SUCCESS), ephemeral=True)
 
 class PokemonRoleSetupView(discord.ui.View):
     def __init__(self): super().__init__(timeout=120)
@@ -1627,12 +1606,9 @@ class PokemonRoleSetupView(discord.ui.View):
     @discord.ui.button(label="Ne pas créer de rôles", style=discord.ButtonStyle.secondary)
     async def disable(self, interaction: discord.Interaction, button: discord.ui.Button):
         set_guild_config(interaction.guild.id, "pokemon_roles_enabled", False)
-        await interaction.response.send_message(embed=firm1_embed("Rôles Pokémon désactivés", "Le classement continue sans créer de rôles.", color=COLOR_INFO), ephemeral=True)
+        set_guild_config(interaction.guild.id, "pokemon_roles_configured", True)
+        await interaction.response.send_message(embed=firm1_embed("Rôles Pokémon désactivés", "Le classement continue sans créer de rôles. Utilisez à nouveau `/pokemon` pour lancer une partie.", color=COLOR_INFO), ephemeral=True)
 
-@tree.command(name="configuration-initiale", description="[Admin] Configure les rôles du Top 3 Pokémon")
-@app_commands.checks.has_permissions(administrator=True)
-async def initial_setup(interaction: discord.Interaction):
-    await interaction.response.send_message(embed=firm1_embed("Configuration initiale", "Souhaitez-vous attribuer automatiquement des rôles aux trois premiers du classement Pokémon ?\n\nVous pourrez saisir le nom de chaque rôle avant leur création.", color=COLOR_PRIMARY), view=PokemonRoleSetupView(), ephemeral=True)
 
 def get_pokemon_top_roles(guild: discord.Guild):
     configured = get_guild_config(guild.id).get("pokemon_top_roles")
@@ -1680,6 +1656,18 @@ async def update_pokemon_top_roles(guild: discord.Guild):
 
 @tree.command(name="pokemon", description="Quel est ce Pokémon ? Devinez son nom en français !")
 async def pokemon_cmd(interaction: discord.Interaction):
+    cfg = get_guild_config(interaction.guild_id)
+    if not cfg.get("pokemon_roles_configured", False):
+        await interaction.response.send_message(
+            embed=firm1_embed(
+                "Avant de commencer",
+                "Souhaitez-vous créer des rôles automatiques pour le Top 3 Pokémon de ce serveur ?\n\nVous pourrez choisir le nom des trois rôles, ou continuer sans créer de rôle.",
+                color=COLOR_PRIMARY,
+            ),
+            view=PokemonRoleSetupView(),
+            ephemeral=True,
+        )
+        return
     channel_id = interaction.channel_id
 
     if channel_id in active_pokemon_games:
