@@ -13,7 +13,7 @@ cleo==2.1.0
 click==8.3.0
 crashtest==0.4.1
 cryptography==46.0.1
-discord.py==2.6.3
+discord.py>=2.7.1,<33
 distlib==0.4.0
 dulwich==0.21.7
 fastjsonschema==2.21.2
