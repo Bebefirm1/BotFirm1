@@ -53,6 +53,9 @@ TICKET_DEFAULTS = {
     "panel_description": "Besoin d'aide ? Ouvrez un ticket et l'équipe vous répondra en privé.",
     "panel_color": COLOR_PRIMARY,
     "panel_image_url": "",
+    "panel_image_uploaded": False,
+    "ticket_image_url": "",
+    "ticket_image_uploaded": False,
     "open_button_label": "🎫 Ouvrir un ticket",
     "info_button_label": "📖 Informations",
     "info_message": "Un seul ticket peut être ouvert à la fois. Choisissez la bonne catégorie et décrivez votre demande.",
@@ -454,6 +457,7 @@ async def _creer_ticket(interaction: discord.Interaction, raison: str = "Non sp�
         return
     if not category:
         category = discord.utils.get(guild.categories, name=settings["default_category_name"])
+    await interaction.response.defer(ephemeral=True)
     if not category:
         category = await guild.create_category(settings["default_category_name"])
     ping_role_ids: list = route.get("ping_roles", cfg.get("ping_roles", [])) if route is not None else cfg.get("ping_roles", [])
@@ -477,8 +481,8 @@ async def _creer_ticket(interaction: discord.Interaction, raison: str = "Non sp�
     )
     close_view = TicketCloseView()
     close_view.children[0].label = settings["close_button_label"]
-    await channel.send(content=f"{user.mention} {' '.join(ping_mentions)}".strip(), embed=embed, view=close_view)
-    await interaction.response.send_message(embed=firm1_embed("Ticket créé !", f"Votre ticket est disponible ici : {channel.mention}", color=COLOR_SUCCESS), ephemeral=True)
+    await send_ticket_embed(channel, guild.id, "ticket", settings, embed, content=f"{user.mention} {' '.join(ping_mentions)}".strip(), view=close_view)
+    await interaction.followup.send(embed=firm1_embed("Ticket créé !", f"Votre ticket est disponible ici : {channel.mention}", color=COLOR_SUCCESS), ephemeral=True)
     log_ch = guild.get_channel(cfg.get("log_channel_id")) if cfg.get("log_channel_id") else None
     if log_ch:
         await log_ch.send(embed=firm1_embed("📥 Nouveau ticket ouvert", f"**Canal :** {channel.mention}\n**Raison :** {raison}", color=COLOR_INFO, fields=[("👤 Utilisateur", f"{user} (`{user.id}`)", True), ("🔔 Rôles notifiés", " ".join(ping_mentions) if ping_mentions else "Aucun", True)]))
@@ -539,6 +543,144 @@ async def retirer_cmd(interaction: discord.Interaction, membre: discord.Member):
 
 
 
+def ticket_emoji_value(value: str, guild: discord.Guild) -> str:
+    value = value.strip() or "🎫"
+    if re.fullmatch(r"<a?:[A-Za-z0-9_]{2,32}:\d{15,22}>", value):
+        return str(discord.PartialEmoji.from_str(value))
+    if value.isdecimal() or re.fullmatch(r":[A-Za-z0-9_]{2,32}:", value):
+        emoji = next((e for e in guild.emojis if str(e.id) == value or e.name == value.strip(":")), None)
+        if emoji is not None:
+            return str(emoji)
+        raise ValueError("Emoji introuvable sur ce serveur. Collez sa forme <:nom:identifiant>.")
+    if any(ord(c) > 127 for c in value) and not any(c.isspace() for c in value) and len(value) <= 16:
+        return value
+    raise ValueError("Utilisez un emoji (🎫), :nom:, son identifiant ou <:nom:identifiant> (animé : <a:nom:identifiant>).")
+
+
+class TicketEmojiModal(discord.ui.Modal, title="Emoji du type de ticket"):
+    emoji = discord.ui.TextInput(label="Emoji personnalisé ou classique", placeholder="<:support:123456789012345678> ou 🎫", max_length=100, required=False)
+
+    def __init__(self, guild_id: int, label: str):
+        super().__init__()
+        self.guild_id, self.label = guild_id, label
+        route = next((c for c in get_guild_config(guild_id).get("ticket_categories", []) if c["label"] == label), {})
+        self.emoji.default = route.get("emoji", "🎫")
+
+    async def on_submit(self, interaction: discord.Interaction):
+        if not interaction.guild or interaction.guild.id != self.guild_id or not interaction.user.guild_permissions.administrator:
+            await interaction.response.send_message("Accès refusé.", ephemeral=True)
+            return
+        categories = get_guild_config(self.guild_id).get("ticket_categories", [])
+        route = next((c for c in categories if c["label"] == self.label), None)
+        if route is None:
+            await interaction.response.send_message("Ce type a été supprimé. Rouvrez la configuration.", ephemeral=True)
+            return
+        try:
+            route["emoji"] = ticket_emoji_value(self.emoji.value, interaction.guild)
+        except ValueError as error:
+            await interaction.response.send_message(str(error), ephemeral=True)
+            return
+        set_guild_config(self.guild_id, "ticket_categories", categories)
+        await interaction.response.edit_message(embed=ticket_route_embed(interaction.guild, self.label), view=TicketRoutingView(self.guild_id, self.label))
+
+
+def ticket_image_path(guild_id: int, kind: str) -> str:
+    if kind not in ("panel", "ticket"):
+        raise ValueError("Destination d'image invalide.")
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "ticket_images", f"{int(guild_id)}_{kind}.img")
+
+
+def ticket_image_extension(data: bytes) -> str:
+    if data.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "png"
+    if data.startswith(b"\xff\xd8\xff"):
+        return "jpg"
+    if data.startswith((b"GIF87a", b"GIF89a")):
+        return "gif"
+    if data.startswith(b"RIFF") and data[8:12] == b"WEBP":
+        return "webp"
+    raise ValueError("Choisissez une image PNG, JPEG, GIF ou WebP.")
+
+
+async def save_ticket_image(interaction: discord.Interaction, kind: str, attachment: discord.Attachment | None):
+    if not interaction.guild or not interaction.user.guild_permissions.administrator:
+        await interaction.response.send_message("Accès refusé.", ephemeral=True)
+        return
+    path = ticket_image_path(interaction.guild.id, kind)
+    await interaction.response.defer(ephemeral=True)
+    try:
+        if attachment is not None:
+            limit = min(8 * 1024 * 1024, interaction.guild.filesize_limit)
+            if attachment.size > limit:
+                raise ValueError(f"L'image doit faire moins de {limit // (1024 * 1024)} Mo.")
+            data = await attachment.read()
+            ticket_image_extension(data)
+            if len(data) > limit:
+                raise ValueError("Cette image est trop volumineuse.")
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            # Fixed names derived from the guild and destination, never from an uploaded filename.
+            with open(path + ".tmp", "wb") as output:
+                output.write(data)
+            os.replace(path + ".tmp", path)
+        settings = get_ticket_settings(interaction.guild.id)
+        settings[f"{kind}_image_uploaded"] = attachment is not None
+        settings[f"{kind}_image_url"] = ""
+        set_guild_config(interaction.guild.id, "ticket_settings", settings)
+    except (ValueError, OSError, discord.HTTPException) as error:
+        message = str(error) if isinstance(error, ValueError) else "Impossible d'enregistrer l'image. Réessayez."
+        await interaction.followup.send(message, ephemeral=True)
+        return
+    message = "Image enregistrée." if attachment is not None else "Image retirée."
+    message += " Publiez le panneau avec /panel-tickets." if kind == "panel" else " Elle sera appliquée aux prochains tickets."
+    await interaction.followup.send(message, ephemeral=True)
+
+
+async def send_ticket_embed(channel, guild_id: int, kind: str, settings: dict, embed: discord.Embed, **kwargs):
+    if settings.get(f"{kind}_image_uploaded"):
+        path = ticket_image_path(guild_id, kind)
+        with open(path, "rb") as image:
+            extension = ticket_image_extension(image.read(12))
+            image.seek(0)
+            attachment = discord.File(image, filename=f"{kind}.{extension}")
+            try:
+                embed.set_image(url=f"attachment://{attachment.filename}")
+                return await channel.send(embed=embed, file=attachment, **kwargs)
+            finally:
+                attachment.close()
+    if settings.get(f"{kind}_image_url"):
+        embed.set_image(url=settings[f"{kind}_image_url"])
+    return await channel.send(embed=embed, **kwargs)
+
+
+class TicketImageModal(discord.ui.Modal):
+    def __init__(self, guild_id: int, kind: str):
+        super().__init__(title="Image du panneau" if kind == "panel" else "Image du ticket créé")
+        self.guild_id, self.kind = guild_id, kind
+        self.upload = discord.ui.FileUpload(min_values=0, max_values=1, required=False)
+        self.add_item(discord.ui.Label(text="Glissez votre image ici", description="PNG, JPEG, GIF ou WebP, 8 Mo maximum. Validez sans fichier pour retirer l'image.", component=self.upload))
+
+    async def on_submit(self, interaction: discord.Interaction):
+        if not interaction.guild or interaction.guild.id != self.guild_id:
+            await interaction.response.send_message("Accès refusé.", ephemeral=True)
+            return
+        await save_ticket_image(interaction, self.kind, self.upload.values[0] if self.upload.values else None)
+
+
+async def open_ticket_image_modal(interaction: discord.Interaction, guild_id: int, kind: str):
+    if hasattr(discord.ui, "FileUpload"):
+        await interaction.response.send_modal(TicketImageModal(guild_id, kind))
+    else:
+        await interaction.response.send_message(f"Utilisez `/image-tickets destination:{kind}` et glissez votre image dans le champ `image`. Le dépôt dans cette fenêtre nécessite discord.py 2.7 ou plus.", ephemeral=True)
+
+
+@tree.command(name="image-tickets", description="[Admin] Ajoute ou retire une image des panneaux de tickets")
+@app_commands.checks.has_permissions(administrator=True)
+@app_commands.choices(destination=[app_commands.Choice(name="Panneau d'ouverture", value="panel"), app_commands.Choice(name="Ticket créé", value="ticket")])
+@app_commands.describe(image="Glissez votre image ici ; laissez vide pour retirer l'image")
+async def image_tickets(interaction: discord.Interaction, destination: str, image: discord.Attachment | None = None):
+    await save_ticket_image(interaction, destination, image)
+
+
 class TicketPanelModal(discord.ui.Modal, title="Panel d'ouverture"):
     titre = discord.ui.TextInput(label="Titre", max_length=256)
     description = discord.ui.TextInput(label="Description", style=discord.TextStyle.paragraph, max_length=1000)
@@ -565,6 +707,8 @@ class TicketPanelModal(discord.ui.Modal, title="Panel d'ouverture"):
         image_url = image_url.strip() if separator else ""
         if image_url and not image_url.startswith(("https://", "http://")):
             await interaction.response.send_message("L'image doit être une URL commençant par https:// ou http://.", ephemeral=True); return
+        if image_url != settings.get("panel_image_url", ""):
+            settings["panel_image_uploaded"] = False
         settings.update(panel_title=self.titre.value, panel_description=self.description.value, open_button_label=self.bouton.value, info_button_label=self.bouton_info.value, panel_color=panel_color, panel_image_url=image_url)
         set_guild_config(self.guild_id, "ticket_settings", settings)
         await interaction.response.send_message(embed=firm1_embed("✅ Design enregistré", "Envoyez `/panel-tickets` pour publier la nouvelle version.", color=COLOR_SUCCESS), ephemeral=True)
@@ -647,6 +791,8 @@ def ticket_route_embed(guild: discord.Guild, label: str | None = None) -> discor
     roles = route.get("ping_roles", cfg.get("ping_roles", []))
     category = guild.get_channel(category_id) if category_id else None
     embed = discord.Embed(title=f"Réglages : {label or 'par défaut'}", description="Sélectionnez les rôles et la catégorie ci-dessous. Chaque choix est enregistré immédiatement.", color=COLOR_PRIMARY)
+    if label is not None:
+        embed.add_field(name="Emoji", value=route.get("emoji", "🎫"), inline=False)
     embed.add_field(name="Rôles à notifier", value=" ".join(f"<@&{rid}>" for rid in roles) or "Aucun", inline=False)
     embed.add_field(name="Catégorie Discord", value=category.mention if category else settings["default_category_name"], inline=False)
     embed.set_footer(text="Rôles vides = aucun ping · Catégorie vide = catégorie par défaut")
@@ -659,6 +805,7 @@ class TicketRoutingView(TicketAdminView):
         self.label = label
         if label is None:
             self.remove_item(self.delete_type)
+            self.remove_item(self.edit_emoji)
 
     async def save_route(self, interaction: discord.Interaction, key: str, value):
         cfg = get_guild_config(self.guild_id)
@@ -690,6 +837,10 @@ class TicketRoutingView(TicketAdminView):
     async def category(self, interaction: discord.Interaction, select: discord.ui.ChannelSelect):
         await self.save_route(interaction, "discord_category_id", select.values[0].id if select.values else None)
 
+    @discord.ui.button(label="Modifier l’emoji", style=discord.ButtonStyle.secondary, row=2)
+    async def edit_emoji(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(TicketEmojiModal(self.guild_id, self.label))
+
     @discord.ui.button(label="Supprimer ce type", style=discord.ButtonStyle.danger, row=2)
     async def delete_type(self, interaction: discord.Interaction, button: discord.ui.Button):
         categories = get_guild_config(self.guild_id).get("ticket_categories", [])
@@ -707,6 +858,7 @@ def ticket_types_embed(guild_id: int) -> discord.Embed:
 
 
 class TicketTypeModal(discord.ui.Modal, title="Ajouter un type de ticket"):
+    emoji = discord.ui.TextInput(label="Emoji personnalisé ou classique", placeholder="<:support:123456789012345678> ou 🎫", required=False, max_length=100)
     nom = discord.ui.TextInput(label="Nom du type", max_length=80)
     description = discord.ui.TextInput(label="Description courte", required=False, max_length=100)
 
@@ -727,7 +879,12 @@ class TicketTypeModal(discord.ui.Modal, title="Ajouter un type de ticket"):
         if len(categories) >= 25:
             await interaction.response.send_message("Maximum 25 types de tickets.", ephemeral=True)
             return
-        categories.append({"label": label, "description": self.description.value.strip(), "emoji": "🎫", "discord_category_id": None, "ping_roles": list(cfg.get("ping_roles", []))})
+        try:
+            emoji = ticket_emoji_value(self.emoji.value, interaction.guild)
+        except ValueError as error:
+            await interaction.response.send_message(str(error), ephemeral=True)
+            return
+        categories.append({"label": label, "description": self.description.value.strip(), "emoji": emoji, "discord_category_id": None, "ping_roles": list(cfg.get("ping_roles", []))})
         set_guild_config(self.guild_id, "ticket_categories", categories)
         await interaction.response.edit_message(embed=ticket_route_embed(interaction.guild, label), view=TicketRoutingView(self.guild_id, label))
 
@@ -735,7 +892,7 @@ class TicketTypeModal(discord.ui.Modal, title="Ajouter un type de ticket"):
 class TicketTypeAdminSelect(discord.ui.Select):
     def __init__(self, categories: list[dict]):
         self.labels = [c["label"] for c in categories]
-        super().__init__(placeholder="Configurer un type de ticket", options=[discord.SelectOption(label=c["label"][:100], value=str(i)) for i, c in enumerate(categories)], row=0)
+        super().__init__(placeholder="Configurer un type de ticket", options=[discord.SelectOption(label=c["label"][:100], value=str(i), emoji=c.get("emoji", "🎫")) for i, c in enumerate(categories)], row=0)
 
     async def callback(self, interaction: discord.Interaction):
         label = self.labels[int(self.values[0])]
@@ -788,6 +945,16 @@ class TicketConfigView(discord.ui.View):
         if not self.allowed(interaction):
             await interaction.response.send_message("Accès refusé.", ephemeral=True); return
         await interaction.response.send_modal(TicketOptionsModal(self.guild_id))
+    @discord.ui.button(label="Image du panneau", style=discord.ButtonStyle.secondary, emoji="🖼️", row=2)
+    async def panel_image(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not self.allowed(interaction):
+            await interaction.response.send_message("Accès refusé.", ephemeral=True); return
+        await open_ticket_image_modal(interaction, self.guild_id, "panel")
+    @discord.ui.button(label="Image du ticket créé", style=discord.ButtonStyle.secondary, emoji="🖼️", row=2)
+    async def ticket_image(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not self.allowed(interaction):
+            await interaction.response.send_message("Accès refusé.", ephemeral=True); return
+        await open_ticket_image_modal(interaction, self.guild_id, "ticket")
     @discord.ui.button(label="Rôles et catégorie par défaut", style=discord.ButtonStyle.secondary, row=1)
     async def routing(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not self.allowed(interaction):
@@ -807,6 +974,7 @@ def ticket_config_embed(guild: discord.Guild) -> discord.Embed:
     embed = bot_embed(title="Configuration des tickets", description="Personnalisez les messages avec les boutons. Dans Informations, videz les détails facultatifs pour les masquer.", color=COLOR_PRIMARY, timestamp=datetime.datetime.now(datetime.timezone.utc))
     embed.add_field(name="Panel d'ouverture", value=f"**{settings['panel_title']}**\nBouton : {settings['open_button_label']}", inline=False)
     embed.add_field(name="Ticket créé", value=f"**{settings['ticket_open_title']}**\nFermeture : {settings['close_button_label']}", inline=False)
+    embed.add_field(name="Images", value="Glissez une image via **Image du panneau** ou **Image du ticket créé**.", inline=False)
     embed.add_field(name="Options avancées", value="Préfixe, délai et texte Informations : bouton **Options**.", inline=False)
     cfg = get_guild_config(guild.id)
     embed.add_field(name="Routage des tickets", value=f"**{len(cfg.get('ticket_categories', []))} types** · Rôles et catégorie réglables pour chaque type.\nUtilisez les boutons ci-dessous.", inline=False)
@@ -911,13 +1079,12 @@ async def panel_tickets(interaction: discord.Interaction):
         embed.add_field(name="Bonnes pratiques", value=settings["panel_rules"], inline=False)
     if settings["panel_staff_title"].strip() and ping_roles:
         embed.add_field(name=settings["panel_staff_title"], value=" ".join(r.mention for r in ping_roles), inline=False)
-    if settings.get("panel_image_url"):
-        embed.set_image(url=settings["panel_image_url"])
     view = TicketOpenView()
     view.children[0].label = settings["open_button_label"]
     view.children[1].label = settings["info_button_label"]
-    await interaction.channel.send(embed=embed, view=view)
-    await interaction.response.send_message(embed=firm1_embed("✅ Panel envoyé !", "Le panel de tickets a été créé.", color=COLOR_SUCCESS, fields=[("📁 Logs", log_ch.mention if log_ch else "❌ Non configuré", True), ("🔔 Rôles", " ".join(r.mention for r in ping_roles) if ping_roles else "❌ Aucun configuré", True)]), ephemeral=True)
+    await interaction.response.defer(ephemeral=True)
+    await send_ticket_embed(interaction.channel, interaction.guild.id, "panel", settings, embed, view=view)
+    await interaction.followup.send(embed=firm1_embed("✅ Panel envoyé !", "Le panel de tickets a été créé.", color=COLOR_SUCCESS, fields=[("📁 Logs", log_ch.mention if log_ch else "❌ Non configuré", True), ("🔔 Rôles", " ".join(r.mention for r in ping_roles) if ping_roles else "❌ Aucun configuré", True)]), ephemeral=True)
 
 
 # ═══════════════════════════════════════════════════════════
