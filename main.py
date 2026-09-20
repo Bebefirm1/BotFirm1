@@ -1,3 +1,4 @@
+
 import re
 import os
 import json
@@ -60,7 +61,6 @@ TICKET_DEFAULTS = {
     "panel_rules": "",
     "panel_staff_title": "",
     "ticket_open_title": "🎫 Votre ticket",
-    "ticket_next_step": "",
     "close_button_label": "🔒 Fermer le ticket",
     "ticket_prefix": "ticket",
     "default_category_name": TICKET_CATEGORY_NAME,
@@ -359,26 +359,31 @@ async def owner_mp(interaction: discord.Interaction, membre: discord.User, messa
 
 class TicketReasonModal(discord.ui.Modal, title="📋 Ouvrir un ticket"):
     raison = discord.ui.TextInput(label="Raison de votre demande", placeholder="Décrivez brièvement votre problème...", style=discord.TextStyle.paragraph, max_length=300, required=True)
-    def __init__(self, categorie_label: str, category_id: int | None):
-        super().__init__(title=f"📋 Ticket — {categorie_label}")
+    def __init__(self, categorie_label: str, category_id: int | None, ticket_type: str | None = None):
+        super().__init__(title=f"📋 Ticket — {categorie_label}"[:45])
         self.categorie_label = categorie_label
         self.category_id     = category_id
+        self.ticket_type = ticket_type
     async def on_submit(self, interaction: discord.Interaction):
-        await _creer_ticket(interaction, raison=f"[{self.categorie_label}] {self.raison.value}", category_id=self.category_id)
+        await _creer_ticket(interaction, raison=f"[{self.categorie_label}] {self.raison.value}", category_id=self.category_id, ticket_type=self.ticket_type)
 
 class TicketCategorySelect(discord.ui.Select):
-    def __init__(self, categories: list[dict]):
+    def __init__(self, categories: list[dict], raison: str | None = None):
+        self.raison = raison
         options = [discord.SelectOption(label=c["label"], description=c.get("description", "")[:100], emoji=c.get("emoji", "🎫"), value=str(i)) for i, c in enumerate(categories)]
-        super().__init__(placeholder="Choisissez une catégorie...", min_values=1, max_values=1, options=options, custom_id="ticket_category_select")
+        super().__init__(placeholder="Choisissez un type de ticket...", min_values=1, max_values=1, options=options, custom_id="ticket_category_select")
         self.categories = categories
     async def callback(self, interaction: discord.Interaction):
         cat = self.categories[int(self.values[0])]
-        await interaction.response.send_modal(TicketReasonModal(categorie_label=cat["label"], category_id=cat.get("discord_category_id")))
+        modal = TicketReasonModal(categorie_label=cat["label"], category_id=cat.get("discord_category_id"), ticket_type=cat["label"])
+        if self.raison is not None:
+            modal.raison.default = self.raison[:300]
+        await interaction.response.send_modal(modal)
 
 class TicketCategoryView(discord.ui.View):
-    def __init__(self, categories: list[dict]):
+    def __init__(self, categories: list[dict], raison: str | None = None):
         super().__init__(timeout=60)
-        self.add_item(TicketCategorySelect(categories))
+        self.add_item(TicketCategorySelect(categories, raison))
 
 class TicketCloseConfirmView(discord.ui.View):
     def __init__(self):
@@ -400,7 +405,8 @@ class TicketCloseView(discord.ui.View):
     @discord.ui.button(label="📌 Revendiquer", style=discord.ButtonStyle.success, custom_id="claim_ticket")
     async def claim_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
         cfg      = get_guild_config(interaction.guild.id)
-        ping_ids = cfg.get("ping_roles", [])
+        ticket = next((t for t in open_tickets.values() if t["channel_id"] == interaction.channel.id), {})
+        ping_ids = ticket.get("ping_roles", cfg.get("ping_roles", []))
         is_staff = (interaction.user.guild_permissions.administrator or any(r.id in ping_ids for r in interaction.user.roles))
         if not is_staff:
             await interaction.response.send_message(embed=firm1_embed("Accès refusé", "Seul le staff peut revendiquer un ticket.", color=COLOR_ERROR), ephemeral=True)
@@ -420,13 +426,13 @@ class TicketOpenView(discord.ui.View):
         if not categories:
             await interaction.response.send_modal(TicketReasonModal(categorie_label="Support général", category_id=None))
         else:
-            await interaction.response.send_message(embed=firm1_embed("Choisissez une catégorie", "Sélectionnez la catégorie correspondant à votre demande.", color=COLOR_INFO), view=TicketCategoryView(categories), ephemeral=True)
+            await interaction.response.send_message(embed=firm1_embed("Type de ticket", "Sélectionnez le type correspondant à votre demande.", color=COLOR_INFO), view=TicketCategoryView(categories), ephemeral=True)
     @discord.ui.button(label="📖 Comment ça marche ?", style=discord.ButtonStyle.secondary, custom_id="ticket_info_btn")
     async def info_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         settings = get_ticket_settings(interaction.guild.id)
         await interaction.response.send_message(embed=firm1_embed(settings["info_button_label"], settings["info_message"], color=COLOR_INFO), ephemeral=True)
 
-async def _creer_ticket(interaction: discord.Interaction, raison: str = "Non spécifiée", category_id: int | None = None):
+async def _creer_ticket(interaction: discord.Interaction, raison: str = "Non spécifiée", category_id: int | None = None, ticket_type: str | None = None):
     guild, user = interaction.guild, interaction.user
     cfg         = get_guild_config(guild.id)
     if user.id in open_tickets:
@@ -434,13 +440,23 @@ async def _creer_ticket(interaction: discord.Interaction, raison: str = "Non sp�
         if ch:
             await interaction.response.send_message(embed=firm1_embed("Ticket déjà ouvert", f"Vous avez déjà un ticket ouvert : {ch.mention}", color=COLOR_WARNING), ephemeral=True)
             return
+    route = None
+    if ticket_type is not None:
+        route = next((c for c in cfg.get("ticket_categories", []) if c["label"] == ticket_type), None)
+        if route is None:
+            await interaction.response.send_message("Ce type de ticket n'existe plus. Rouvrez le panel.", ephemeral=True)
+            return
+        category_id = route.get("discord_category_id")
     settings = get_ticket_settings(guild.id)
     category = guild.get_channel(category_id) if category_id else guild.get_channel(settings.get("default_category_id"))
+    if (category_id or settings.get("default_category_id")) and not isinstance(category, discord.CategoryChannel):
+        await interaction.response.send_message("La catégorie Discord configurée est introuvable. Demandez au staff de la corriger dans /config-tickets.", ephemeral=True)
+        return
     if not category:
         category = discord.utils.get(guild.categories, name=settings["default_category_name"])
     if not category:
         category = await guild.create_category(settings["default_category_name"])
-    ping_role_ids: list   = cfg.get("ping_roles", [])
+    ping_role_ids: list = route.get("ping_roles", cfg.get("ping_roles", [])) if route is not None else cfg.get("ping_roles", [])
     ping_mentions: list[str] = []
     overwrites = {
         guild.default_role: discord.PermissionOverwrite(read_messages=False),
@@ -449,18 +465,16 @@ async def _creer_ticket(interaction: discord.Interaction, raison: str = "Non sp�
     }
     for rid in ping_role_ids:
         role = guild.get_role(rid)
-        if role:
+        if role and not role.is_default():
             overwrites[role] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
             ping_mentions.append(role.mention)
     channel = await category.create_text_channel(f"{settings['ticket_prefix']}-{user.name.lower().replace(' ', '-')}", overwrites=overwrites)
-    open_tickets[user.id] = {"channel_id": channel.id, "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(), "reason": raison}
+    open_tickets[user.id] = {"channel_id": channel.id, "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(), "reason": raison, "ping_roles": list(ping_role_ids), "ticket_type": ticket_type}
     embed = discord.Embed(
         title=settings["ticket_open_title"],
         description=settings["welcome_message"].replace("{user}", user.mention).replace("{reason}", raison),
         color=COLOR_SUCCESS,
     )
-    if settings["ticket_next_step"].strip():
-        embed.add_field(name="Prochaine étape", value=settings["ticket_next_step"], inline=False)
     close_view = TicketCloseView()
     close_view.children[0].label = settings["close_button_label"]
     await channel.send(content=f"{user.mention} {' '.join(ping_mentions)}".strip(), embed=embed, view=close_view)
@@ -487,8 +501,17 @@ async def _fermer_ticket(interaction: discord.Interaction):
 
 @tree.command(name="ticket", description="Ouvre un ticket de support")
 @app_commands.describe(raison="La raison de votre demande")
-async def ticket_cmd(interaction: discord.Interaction, raison: str = "Non spécifiée"):
-    await _creer_ticket(interaction, raison)
+async def ticket_cmd(interaction: discord.Interaction, raison: str = "Non spécifiée", type_ticket: str | None = None):
+    categories = get_guild_config(interaction.guild.id).get("ticket_categories", [])
+    if categories and type_ticket is None:
+        await interaction.response.send_message("Choisissez un type de ticket, puis précisez votre demande.", view=TicketCategoryView(categories, raison if raison != "Non spécifiée" else None), ephemeral=True)
+        return
+    await _creer_ticket(interaction, raison, ticket_type=type_ticket)
+
+@ticket_cmd.autocomplete("type_ticket")
+async def ticket_type_autocomplete(interaction: discord.Interaction, current: str):
+    categories = get_guild_config(interaction.guild.id).get("ticket_categories", [])
+    return [app_commands.Choice(name=c["label"][:100], value=c["label"][:100]) for c in categories if current.casefold() in c["label"].casefold()][:25]
 
 @tree.command(name="fermer", description="Ferme votre ticket de support")
 async def fermer_cmd(interaction: discord.Interaction):
@@ -566,17 +589,16 @@ class TicketPanelDetailsModal(discord.ui.Modal, title="Informations du panel"):
 class TicketOpenedModal(discord.ui.Modal, title="Message du ticket créé"):
     titre = discord.ui.TextInput(label="Titre", max_length=256)
     bienvenue = discord.ui.TextInput(label="Message ({user} et {reason} disponibles)", style=discord.TextStyle.paragraph, max_length=1500)
-    prochaine_etape = discord.ui.TextInput(label="Prochaine étape (vide = masquée)", style=discord.TextStyle.paragraph, required=False, max_length=600)
     fermer = discord.ui.TextInput(label="Bouton de fermeture", max_length=80)
     def __init__(self, guild_id: int):
         super().__init__()
         self.guild_id = guild_id
         settings = get_ticket_settings(guild_id)
         self.titre.default, self.bienvenue.default = settings["ticket_open_title"], settings["welcome_message"]
-        self.prochaine_etape.default, self.fermer.default = settings["ticket_next_step"], settings["close_button_label"]
+        self.fermer.default = settings["close_button_label"]
     async def on_submit(self, interaction: discord.Interaction):
         settings = get_ticket_settings(self.guild_id)
-        settings.update(ticket_open_title=self.titre.value, welcome_message=self.bienvenue.value, ticket_next_step=self.prochaine_etape.value, close_button_label=self.fermer.value)
+        settings.update(ticket_open_title=self.titre.value, welcome_message=self.bienvenue.value, close_button_label=self.fermer.value)
         set_guild_config(self.guild_id, "ticket_settings", settings)
         await interaction.response.send_message(embed=firm1_embed("✅ Ticket personnalisé", "Les prochains tickets utiliseront ce message.", color=COLOR_SUCCESS), ephemeral=True)
 
@@ -605,6 +627,141 @@ class TicketOptionsModal(discord.ui.Modal, title="Options des tickets"):
         set_guild_config(self.guild_id, "ticket_settings", settings)
         await interaction.response.send_message(embed=firm1_embed("✅ Options enregistrées", "Les prochains tickets utiliseront ces réglages.", color=COLOR_SUCCESS), ephemeral=True)
 
+class TicketAdminView(discord.ui.View):
+    def __init__(self, guild_id: int):
+        super().__init__(timeout=300)
+        self.guild_id = guild_id
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.guild and interaction.guild.id == self.guild_id and interaction.user.guild_permissions.administrator:
+            return True
+        await interaction.response.send_message("Accès refusé.", ephemeral=True)
+        return False
+
+
+def ticket_route_embed(guild: discord.Guild, label: str | None = None) -> discord.Embed:
+    cfg = get_guild_config(guild.id)
+    settings = get_ticket_settings(guild.id)
+    route = next((c for c in cfg.get("ticket_categories", []) if c["label"] == label), {}) if label is not None else {}
+    category_id = route.get("discord_category_id") or settings.get("default_category_id")
+    roles = route.get("ping_roles", cfg.get("ping_roles", []))
+    category = guild.get_channel(category_id) if category_id else None
+    embed = discord.Embed(title=f"Réglages : {label or 'par défaut'}", description="Sélectionnez les rôles et la catégorie ci-dessous. Chaque choix est enregistré immédiatement.", color=COLOR_PRIMARY)
+    embed.add_field(name="Rôles à notifier", value=" ".join(f"<@&{rid}>" for rid in roles) or "Aucun", inline=False)
+    embed.add_field(name="Catégorie Discord", value=category.mention if category else settings["default_category_name"], inline=False)
+    embed.set_footer(text="Rôles vides = aucun ping · Catégorie vide = catégorie par défaut")
+    return embed
+
+
+class TicketRoutingView(TicketAdminView):
+    def __init__(self, guild_id: int, label: str | None = None):
+        super().__init__(guild_id)
+        self.label = label
+        if label is None:
+            self.remove_item(self.delete_type)
+
+    async def save_route(self, interaction: discord.Interaction, key: str, value):
+        cfg = get_guild_config(self.guild_id)
+        if self.label is None:
+            if key == "ping_roles":
+                set_guild_config(self.guild_id, key, value)
+            else:
+                settings = get_ticket_settings(self.guild_id)
+                settings["default_category_id"] = value
+                set_guild_config(self.guild_id, "ticket_settings", settings)
+        else:
+            categories = cfg.get("ticket_categories", [])
+            route = next((c for c in categories if c["label"] == self.label), None)
+            if route is None:
+                await interaction.response.send_message("Ce type a été supprimé. Rouvrez la configuration.", ephemeral=True)
+                return
+            route[key] = value
+            set_guild_config(self.guild_id, "ticket_categories", categories)
+        await interaction.response.edit_message(embed=ticket_route_embed(interaction.guild, self.label), view=self)
+
+    @discord.ui.select(cls=discord.ui.RoleSelect, placeholder="Rôles à notifier (vide = aucun)", min_values=0, max_values=25, row=0)
+    async def roles(self, interaction: discord.Interaction, select: discord.ui.RoleSelect):
+        if any(role.is_default() for role in select.values):
+            await interaction.response.send_message("Choisissez des rôles de support, pas @everyone : les tickets doivent rester privés.", ephemeral=True)
+            return
+        await self.save_route(interaction, "ping_roles", [role.id for role in select.values])
+
+    @discord.ui.select(cls=discord.ui.ChannelSelect, channel_types=[discord.ChannelType.category], placeholder="Catégorie Discord de destination", min_values=0, max_values=1, row=1)
+    async def category(self, interaction: discord.Interaction, select: discord.ui.ChannelSelect):
+        await self.save_route(interaction, "discord_category_id", select.values[0].id if select.values else None)
+
+    @discord.ui.button(label="Supprimer ce type", style=discord.ButtonStyle.danger, row=2)
+    async def delete_type(self, interaction: discord.Interaction, button: discord.ui.Button):
+        categories = get_guild_config(self.guild_id).get("ticket_categories", [])
+        set_guild_config(self.guild_id, "ticket_categories", [c for c in categories if c["label"] != self.label])
+        await interaction.response.edit_message(embed=ticket_types_embed(self.guild_id), view=TicketTypesView(self.guild_id))
+
+    @discord.ui.button(label="Retour à la configuration", style=discord.ButtonStyle.secondary, row=2)
+    async def back(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.edit_message(embed=ticket_config_embed(interaction.guild), view=TicketConfigView(self.guild_id))
+
+
+def ticket_types_embed(guild_id: int) -> discord.Embed:
+    count = len(get_guild_config(guild_id).get("ticket_categories", []))
+    return discord.Embed(title=f"Types de tickets ({count}/25)", description="Ajoutez un type ou sélectionnez-en un pour choisir ses rôles à notifier et sa catégorie Discord.", color=COLOR_PRIMARY)
+
+
+class TicketTypeModal(discord.ui.Modal, title="Ajouter un type de ticket"):
+    nom = discord.ui.TextInput(label="Nom du type", max_length=80)
+    description = discord.ui.TextInput(label="Description courte", required=False, max_length=100)
+
+    def __init__(self, guild_id: int):
+        super().__init__()
+        self.guild_id = guild_id
+
+    async def on_submit(self, interaction: discord.Interaction):
+        if not interaction.guild or interaction.guild.id != self.guild_id or not interaction.user.guild_permissions.administrator:
+            await interaction.response.send_message("Accès refusé.", ephemeral=True)
+            return
+        cfg = get_guild_config(self.guild_id)
+        categories = cfg.get("ticket_categories", [])
+        label = self.nom.value.strip()
+        if not label or any(c["label"].casefold() == label.casefold() for c in categories):
+            await interaction.response.send_message("Choisissez un nom non vide et unique.", ephemeral=True)
+            return
+        if len(categories) >= 25:
+            await interaction.response.send_message("Maximum 25 types de tickets.", ephemeral=True)
+            return
+        categories.append({"label": label, "description": self.description.value.strip(), "emoji": "🎫", "discord_category_id": None, "ping_roles": list(cfg.get("ping_roles", []))})
+        set_guild_config(self.guild_id, "ticket_categories", categories)
+        await interaction.response.edit_message(embed=ticket_route_embed(interaction.guild, label), view=TicketRoutingView(self.guild_id, label))
+
+
+class TicketTypeAdminSelect(discord.ui.Select):
+    def __init__(self, categories: list[dict]):
+        self.labels = [c["label"] for c in categories]
+        super().__init__(placeholder="Configurer un type de ticket", options=[discord.SelectOption(label=c["label"][:100], value=str(i)) for i, c in enumerate(categories)], row=0)
+
+    async def callback(self, interaction: discord.Interaction):
+        label = self.labels[int(self.values[0])]
+        if not any(c["label"] == label for c in get_guild_config(interaction.guild.id).get("ticket_categories", [])):
+            await interaction.response.send_message("Ce type a été supprimé. Rouvrez la configuration.", ephemeral=True)
+            return
+        await interaction.response.edit_message(embed=ticket_route_embed(interaction.guild, label), view=TicketRoutingView(interaction.guild.id, label))
+
+
+class TicketTypesView(TicketAdminView):
+    def __init__(self, guild_id: int):
+        super().__init__(guild_id)
+        categories = get_guild_config(guild_id).get("ticket_categories", [])
+        if categories:
+            self.add_item(TicketTypeAdminSelect(categories))
+
+    @discord.ui.button(label="Ajouter un type", style=discord.ButtonStyle.success, row=1)
+    async def add_type(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(TicketTypeModal(self.guild_id))
+
+    @discord.ui.button(label="Retour à la configuration", style=discord.ButtonStyle.secondary, row=1)
+    async def back(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.edit_message(embed=ticket_config_embed(interaction.guild), view=TicketConfigView(self.guild_id))
+
+
+
 class TicketConfigView(discord.ui.View):
     def __init__(self, guild_id: int):
         super().__init__(timeout=180)
@@ -631,16 +788,28 @@ class TicketConfigView(discord.ui.View):
         if not self.allowed(interaction):
             await interaction.response.send_message("Accès refusé.", ephemeral=True); return
         await interaction.response.send_modal(TicketOptionsModal(self.guild_id))
+    @discord.ui.button(label="Rôles et catégorie par défaut", style=discord.ButtonStyle.secondary, row=1)
+    async def routing(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not self.allowed(interaction):
+            await interaction.response.send_message("Accès refusé.", ephemeral=True); return
+        await interaction.response.edit_message(embed=ticket_route_embed(interaction.guild), view=TicketRoutingView(self.guild_id))
+    @discord.ui.button(label="Types de tickets", style=discord.ButtonStyle.primary, row=1)
+    async def types(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not self.allowed(interaction):
+            await interaction.response.send_message("Accès refusé.", ephemeral=True); return
+        await interaction.response.edit_message(embed=ticket_types_embed(self.guild_id), view=TicketTypesView(self.guild_id))
     @discord.ui.button(label="Actualiser", style=discord.ButtonStyle.secondary, emoji="🔄")
     async def refresh(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.edit_message(embed=ticket_config_embed(interaction.guild), view=self)
 
 def ticket_config_embed(guild: discord.Guild) -> discord.Embed:
     settings = get_ticket_settings(guild.id)
-    embed = bot_embed(title="Configuration des tickets", description="Personnalisez les messages avec les boutons. Dans Informations et Ticket créé, videz les détails facultatifs pour les masquer.", color=COLOR_PRIMARY, timestamp=datetime.datetime.now(datetime.timezone.utc))
+    embed = bot_embed(title="Configuration des tickets", description="Personnalisez les messages avec les boutons. Dans Informations, videz les détails facultatifs pour les masquer.", color=COLOR_PRIMARY, timestamp=datetime.datetime.now(datetime.timezone.utc))
     embed.add_field(name="Panel d'ouverture", value=f"**{settings['panel_title']}**\nBouton : {settings['open_button_label']}", inline=False)
     embed.add_field(name="Ticket créé", value=f"**{settings['ticket_open_title']}**\nFermeture : {settings['close_button_label']}", inline=False)
     embed.add_field(name="Options avancées", value="Préfixe, délai et texte Informations : bouton **Options**.", inline=False)
+    cfg = get_guild_config(guild.id)
+    embed.add_field(name="Routage des tickets", value=f"**{len(cfg.get('ticket_categories', []))} types** · Rôles et catégorie réglables pour chaque type.\nUtilisez les boutons ci-dessous.", inline=False)
     return embed
 
 @tree.command(name="config-tickets", description="[Admin] Ouvre la configuration interactive des tickets")
