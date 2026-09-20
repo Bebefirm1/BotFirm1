@@ -50,6 +50,8 @@ BOT_LABEL = "Bot Discord"
 TICKET_DEFAULTS = {
     "panel_title": "🎫 Support",
     "panel_description": "Besoin d'aide ? Ouvrez un ticket et l'équipe vous répondra en privé.",
+    "panel_color": COLOR_PRIMARY,
+    "panel_image_url": "",
     "open_button_label": "🎫 Ouvrir un ticket",
     "info_button_label": "📖 Informations",
     "info_message": "Un seul ticket peut être ouvert à la fois. Choisissez la bonne catégorie et décrivez votre demande.",
@@ -525,17 +527,30 @@ class TicketPanelModal(discord.ui.Modal, title="Panel d'ouverture"):
     description = discord.ui.TextInput(label="Description", style=discord.TextStyle.paragraph, max_length=1000)
     bouton = discord.ui.TextInput(label="Bouton d'ouverture", max_length=80)
     bouton_info = discord.ui.TextInput(label="Bouton informations", max_length=80)
+    apparence = discord.ui.TextInput(label="Couleur + image URL (optionnels)", placeholder="#5865F2 | https://exemple.com/banniere.png", required=False, max_length=500)
     def __init__(self, guild_id: int):
         super().__init__()
         self.guild_id = guild_id
         settings = get_ticket_settings(guild_id)
         self.titre.default, self.description.default = settings["panel_title"], settings["panel_description"]
         self.bouton.default, self.bouton_info.default = settings["open_button_label"], settings["info_button_label"]
+        color = f"#{settings.get('panel_color', COLOR_PRIMARY):06X}"
+        image = settings.get("panel_image_url", "")
+        self.apparence.default = f"{color} | {image}" if image else color
     async def on_submit(self, interaction: discord.Interaction):
         settings = get_ticket_settings(self.guild_id)
-        settings.update(panel_title=self.titre.value, panel_description=self.description.value, open_button_label=self.bouton.value, info_button_label=self.bouton_info.value)
+        color_text, separator, image_url = self.apparence.value.strip().partition("|")
+        try:
+            panel_color = int(color_text.strip().lstrip("#"), 16) if color_text.strip() else COLOR_PRIMARY
+            if not 0 <= panel_color <= 0xFFFFFF: raise ValueError
+        except ValueError:
+            await interaction.response.send_message("Couleur invalide. Exemple : `#5865F2`.", ephemeral=True); return
+        image_url = image_url.strip() if separator else ""
+        if image_url and not image_url.startswith(("https://", "http://")):
+            await interaction.response.send_message("L'image doit être une URL commençant par https:// ou http://.", ephemeral=True); return
+        settings.update(panel_title=self.titre.value, panel_description=self.description.value, open_button_label=self.bouton.value, info_button_label=self.bouton_info.value, panel_color=panel_color, panel_image_url=image_url)
         set_guild_config(self.guild_id, "ticket_settings", settings)
-        await interaction.response.send_message(embed=firm1_embed("✅ Panel enregistré", "Envoyez `/panel-tickets` pour publier la nouvelle version.", color=COLOR_SUCCESS), ephemeral=True)
+        await interaction.response.send_message(embed=firm1_embed("✅ Design enregistré", "Envoyez `/panel-tickets` pour publier la nouvelle version.", color=COLOR_SUCCESS), ephemeral=True)
 
 class TicketPanelDetailsModal(discord.ui.Modal, title="Informations du panel"):
     etape_un = discord.ui.TextInput(label="Étape 1", style=discord.TextStyle.paragraph, max_length=300)
@@ -725,33 +740,31 @@ async def panel_tickets(interaction: discord.Interaction):
         title=settings["panel_title"],
         description=(
             f"{settings['panel_description']}\n\n"
-            "Cliquez sur le bouton ci-dessous pour créer un espace privé avec l'équipe."
+            "**Un espace privé et confidentiel sera créé pour votre demande.**"
         ),
-        color=COLOR_PRIMARY,
+        color=settings.get("panel_color", COLOR_PRIMARY),
         timestamp=datetime.datetime.now(datetime.timezone.utc),
     )
     embed.add_field(
-        name="01 · Créer votre demande",
-        value=settings["panel_step_one"],
+        name="✦ Comment ouvrir une demande",
+        value=f"**1.** {settings['panel_step_one']}\n**2.** {settings['panel_step_two']}",
         inline=False,
     )
+    embed.add_field(name="✦ Bonnes pratiques", value=settings["panel_rules"], inline=True)
     embed.add_field(
-        name="02 · Échanger en privé",
-        value=settings["panel_step_two"],
-        inline=False,
-    )
-    embed.add_field(
-        name="À savoir",
-        value=settings["panel_rules"],
+        name=f"✦ {settings['panel_staff_title']}",
+        value=" ".join(r.mention for r in ping_roles) if ping_roles else "Équipe non configurée",
         inline=True,
     )
     embed.add_field(
-        name=settings["panel_staff_title"],
-        value=" ".join(r.mention for r in ping_roles) if ping_roles else "Aucun rôle de support configuré",
-        inline=True,
+        name="✦ Confidentialité",
+        value="Votre ticket est visible uniquement par vous et les membres autorisés.",
+        inline=False,
     )
-    embed.set_footer(text=f"Centre d'assistance · {interaction.guild.name}")
-    if interaction.guild.icon:
+    embed.set_footer(text=f"Assistance · {interaction.guild.name}")
+    if settings.get("panel_image_url"):
+        embed.set_image(url=settings["panel_image_url"])
+    elif interaction.guild.icon:
         embed.set_thumbnail(url=interaction.guild.icon.url)
     view = TicketOpenView()
     view.children[0].label = settings["open_button_label"]
