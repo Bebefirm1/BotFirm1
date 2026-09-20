@@ -216,55 +216,119 @@ async def on_app_command_error(interaction: discord.Interaction, error: app_comm
     except discord.InteractionResponded:
         await interaction.followup.send(embed=embed, ephemeral=True)
 
-@tree.command(name="help", description="Affiche l'aide complète de Bot Discord")
+@tree.command(name="help", description="Parcourt les commandes et les réglages du bot")
 async def help_cmd(interaction: discord.Interaction):
-    page1 = bot_embed(title="🎫 Tickets — Page 1/5", description="Système de tickets de support.", color=COLOR_PRIMARY)
-    page1.add_field(name="📩 Membres", value=("`/ticket` — Ouvrir un ticket\n`/fermer` — Fermer votre ticket\n`/ajouter @user` — Ajouter un membre\n`/retirer @user` — Retirer un membre"), inline=False)
-    page1.add_field(name="⚙️ Administration", value=("`/panel-tickets` — Envoyer le panel\n`/config-tickets` — Voir la configuration\n`/set-log-tickets` — Salon de logs\n`/ajouter-role-ticket` — Ajouter rôle ping\n`/retirer-role-ticket` — Retirer rôle ping\n`/ajouter-categorie-ticket` — Ajouter catégorie\n`/retirer-categorie-ticket` — Retirer catégorie\n`/reset-config-tickets` — Réinitialiser"), inline=False)
-    page1.set_footer(text="Nadouja · Mitteg · Not Feller")
-    page2 = bot_embed(title="🔨 Modération — Page 2/5", description="Commandes de modération manuelle.", color=COLOR_ERROR)
-    page2.add_field(name="👮 Sanctions", value=("`/ban @user` — Bannir un membre\n`/kick @user` — Expulser un membre\n`/mute @user durée` — Mute (10s, 5m, 2h, 1j)\n`/unmute @user` — Retirer le mute\n`/warn @user raison` — Avertir\n`/warns @user` — Voir les avertissements\n`/clear 1-100` — Supprimer des messages\n`/set-log-mod` — Salon de logs mod"), inline=False)
-    page2.set_footer(text="Nadouja · Mitteg · Not Feller")
-    page3 = bot_embed(title="🤖 Auto-Modération — Page 3/5", description="Modération automatique configurable.", color=COLOR_WARNING)
-    page3.add_field(name="⚙️ Configuration", value=("`/config-auto-mod` — Ouvrir les réglages interactifs\nMots interdits • Antispam • Liens • Images"), inline=False)
-    page3.add_field(name="🚨 Automatique", value=("Mots interdits → suppression + MP\nLiens → suppression par salon\nImages → suppression par salon\nAntispam → mute automatique"), inline=False)
-    page3.set_footer(text="Nadouja · Mitteg · Not Feller")
-    page4 = bot_embed(title="🛡️ Whitelist & Blacklist — Page 4/5", description="Gestion des accès membres.", color=COLOR_INFO)
-    page4.add_field(name="✅ Whitelist — bypass auto-mod", value=("`/whitelist-ajouter @user` — Ajouter\n`/whitelist-retirer @user` — Retirer\n`/whitelist-liste` — Voir la liste"), inline=False)
-    page4.add_field(name="⛔ Blacklist — expulsion automatique", value=("`/blacklist-ajouter @user` — Blacklister\n`/blacklist-retirer @user` — Retirer\n`/blacklist-liste` — Voir la liste"), inline=False)
-    page4.set_footer(text="Nadouja · Mitteg · Not Feller")
-    page5 = bot_embed(title="🎮 Mini-Jeux & Utilitaires — Page 5/5", description="Jeux et outils divers.", color=COLOR_SUCCESS)
-    page5.add_field(name="🎮 Mini-Jeux", value=("`/pile-ou-face` — Lancer une pièce\n`/dé` — Lancer un dé\n`/rps` — Pierre-Papier-Ciseaux\n`/nombre` — Deviner un nombre\n`/8ball` — Boule magique\n`/trivia` — Culture générale\n`/pokemon` — Quel est ce Pokémon ?\n`/pokemon-score` — Classement des dresseurs"), inline=False)
-    page5.add_field(name="🛠️ Utilitaires", value=("`/ping` — Latence du bot\n`/info-serveur` — Infos serveur\n`/info-user` — Infos membre\n`/avatar` — Avatar\n`/say` — Parler à la place du bot\n`/renommer-bot` — Changer le pseudo\n`/help` — Cette aide"), inline=False)
-    page5.set_footer(text="Nadouja · Mitteg · Not Feller")
-    pages = [page1, page2, page3, page4, page5]
+    pages = []
+    sections = []
+
+    def page(label, emoji, description, color, fields):
+        embed = discord.Embed(title=f"{emoji}  {label}", description=description, color=color)
+        embed.set_author(name=BOT_LABEL)
+        for name, value in fields:
+            embed.add_field(name=name, value=value, inline=False)
+        pages.append(embed)
+        sections.append((label, emoji))
+
+    page("Bienvenue", "👋", "Les commandes utiles, classées par thème.\nChoisissez une rubrique dans le menu ci-dessous.", COLOR_PRIMARY, [
+        ("Besoin d'aide ?", "`/ticket` ouvre une demande privée auprès de l'équipe."),
+        ("Configurer les tickets · Admin", "`/config-tickets` pour les types, les rôles et les catégories.\n`/panel-tickets` pour publier le panneau d'ouverture."),
+        ("Envie de jouer ?", "`/pokemon`, `/trivia` ou `/rps` : rendez-vous dans **Jeux**."),
+    ])
+    page("Utiliser les tickets", "🎫", "Une demande, un salon privé, la bonne équipe.", COLOR_PRIMARY, [
+        ("Ouvrir et fermer", "`/ticket` — choisir un type et décrire sa demande.\n`/fermer` — fermer le ticket actuel."),
+        ("Partager le ticket", "`/ajouter` — donner accès à un membre.\n`/retirer` — retirer l'accès d'un membre."),
+        ("Depuis le panneau", "**Ouvrir un ticket** lance le formulaire.\nLe staff du type choisi peut utiliser **Revendiquer**."),
+    ])
+    page("Personnaliser les tickets", "🎨", "Administration · Textes, emojis et bannières au même endroit.", COLOR_PRIMARY, [
+        ("Le panneau central", "`/panel-tickets`\nRenseignez **titre**, **description** et **image**, puis publiez."),
+        ("Chaque type de ticket", "`/config-type-ticket`\nChoisissez **type_ticket**, puis **titre**, **description**, **emoji** et **image**."),
+        ("Déposer une bannière", "Glissez le fichier dans **image**, comme avec `/say`.\nImage facultative : l'omettre conserve la bannière.\n**retirer_image : vrai** la supprime."),
+        ("Seulement la bannière", "`/image-tickets` — choisir la destination et, pour un ticket, **type_ticket**.\nAvec cette commande seule, laisser **image** vide retire la bannière."),
+    ])
+    page("Organisation des tickets", "⚙️", "Administration · Une destination et des rôles propres à chaque type.", COLOR_INFO, [
+        ("Tout configurer", "`/config-tickets` — types, rôles à notifier, catégorie Discord, textes et boutons.\nChaque type peut avoir ses propres rôles, emoji et bannière."),
+        ("Types et destinations", "`/ajouter-categorie-ticket` — ajouter un type et sa catégorie Discord.\n`/retirer-categorie-ticket` — supprimer un type."),
+        ("Rôles par défaut", "`/ajouter-role-ticket` — ajouter un rôle par défaut.\n`/retirer-role-ticket` — retirer un rôle par défaut.\nLes rôles propres à un type se règlent dans `/config-tickets`."),
+        ("Suivi et remise à zéro", "`/set-log-tickets` — choisir le salon de suivi.\n`/reset-config-tickets` — réinitialiser la configuration enregistrée du serveur."),
+    ])
+    page("Modération", "🔨", "Les actions nécessitent les permissions correspondantes.", COLOR_ERROR, [
+        ("Gérer un membre", "`/ban` — bannir.\n`/kick` — expulser.\n`/mute` — mettre en sourdine (ex. **10m**, **2h**, **1j**).\n`/unmute` — lever la sourdine."),
+        ("Avertissements", "`/warn` — donner un avertissement.\n`/warns` — consulter les avertissements."),
+        ("Messages et suivi", "`/clear` — supprimer des messages.\n`/set-log-mod` — choisir le salon de suivi de la modération."),
+    ])
+    page("Protection automatique", "🛡️", "Administration · Réglez les protections et les exceptions.", COLOR_WARNING, [
+        ("Réglages", "`/config-auto-mod` — mots interdits, antispam, liens et images par salon."),
+        ("Membres exemptés", "`/whitelist-ajouter` — ajouter une exception.\n`/whitelist-retirer` — retirer une exception.\n`/whitelist-liste` — consulter les exceptions."),
+        ("Membres bloqués", "`/blacklist-ajouter` — bloquer et expulser un membre.\n`/blacklist-retirer` — retirer le blocage.\n`/blacklist-liste` — consulter les membres bloqués."),
+    ])
+    page("Jeux", "🎮", "Une petite pause entre deux conversations.", COLOR_SUCCESS, [
+        ("Défis", "`/pokemon` — reconnaître un Pokémon.\n`/pokemon-score` — voir le classement.\n`/trivia` — répondre à une question.\n`/nombre` — deviner le nombre secret."),
+        ("Jeux rapides", "`/rps` — pierre, papier, ciseaux.\n`/pile-ou-face` — lancer une pièce.\n`/dé` — lancer un dé.\n`/8ball` — poser une question à la boule magique."),
+    ])
+    page("Outils", "🧰", "Informations du serveur et petites commandes pratiques.", COLOR_INFO, [
+        ("Consulter", "`/ping` — vérifier la latence.\n`/info-serveur` — informations du serveur.\n`/info-user` — informations d'un membre.\n`/avatar` — afficher un avatar."),
+        ("Publier · Admin", "`/say` — envoyer du texte, une image ou les deux.\n`/renommer-bot` — changer le pseudo du bot."),
+        ("Retrouver ce guide", "`/help` — rouvrir cette aide à tout moment."),
+    ])
+    if interaction.user.id == OWNER_ID:
+        pages[-1].add_field(name="Propriétaire", value="`/mp` — envoyer un message privé à un membre.", inline=False)
+    for index, embed in enumerate(pages):
+        embed.set_footer(text=f"{index + 1} / {len(pages)} · Menu pour choisir · Flèches pour parcourir")
+
+    class HelpCategorySelect(discord.ui.Select):
+        def __init__(self):
+            super().__init__(placeholder="Choisir une rubrique…", row=0, options=[discord.SelectOption(label=label, emoji=emoji, value=str(i), default=i == 0) for i, (label, emoji) in enumerate(sections)])
+
+        async def callback(self, component_interaction: discord.Interaction):
+            await self.view.show(component_interaction, int(self.values[0]))
 
     class HelpView(discord.ui.View):
         def __init__(self):
-            super().__init__(timeout=120)
+            super().__init__(timeout=300)
             self.page = 0
-            self.prev_btn.disabled = True
-            self.page_btn.label = "1 / 5"
-        def update_buttons(self):
-            self.prev_btn.disabled = (self.page == 0)
-            self.next_btn.disabled = (self.page == len(pages) - 1)
-            self.page_btn.label = f"{self.page + 1} / {len(pages)}"
-        @discord.ui.button(label="◀", style=discord.ButtonStyle.secondary)
-        async def prev_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-            self.page -= 1
+            self.menu = HelpCategorySelect()
+            self.add_item(self.menu)
             self.update_buttons()
-            await interaction.response.edit_message(embed=pages[self.page], view=self)
-        @discord.ui.button(label="1 / 5", style=discord.ButtonStyle.primary, disabled=True)
-        async def page_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-            await interaction.response.defer()
-        @discord.ui.button(label="▶", style=discord.ButtonStyle.secondary)
-        async def next_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-            self.page += 1
-            self.update_buttons()
-            await interaction.response.edit_message(embed=pages[self.page], view=self)
 
-    view = HelpView()
-    await interaction.response.send_message(embed=pages[0], view=view, ephemeral=True)
+        def update_buttons(self):
+            self.prev_btn.disabled = self.page == 0
+            self.home_btn.disabled = self.page == 0
+            self.next_btn.disabled = self.page == len(pages) - 1
+            self.page_btn.label = f"{self.page + 1} / {len(pages)}"
+            for i, option in enumerate(self.menu.options):
+                option.default = i == self.page
+
+        async def show(self, component_interaction, index):
+            self.page = max(0, min(index, len(pages) - 1))
+            self.update_buttons()
+            await component_interaction.response.edit_message(embed=pages[self.page], view=self)
+
+        @discord.ui.button(label="Précédent", emoji="◀️", style=discord.ButtonStyle.secondary, row=1)
+        async def prev_btn(self, component_interaction: discord.Interaction, button: discord.ui.Button):
+            await self.show(component_interaction, self.page - 1)
+
+        @discord.ui.button(label="Accueil", emoji="🏠", style=discord.ButtonStyle.secondary, row=1)
+        async def home_btn(self, component_interaction: discord.Interaction, button: discord.ui.Button):
+            await self.show(component_interaction, 0)
+
+        @discord.ui.button(label="1 / 8", style=discord.ButtonStyle.secondary, disabled=True, row=1)
+        async def page_btn(self, component_interaction: discord.Interaction, button: discord.ui.Button):
+            await component_interaction.response.defer()
+
+        @discord.ui.button(label="Suivant", emoji="▶️", style=discord.ButtonStyle.primary, row=1)
+        async def next_btn(self, component_interaction: discord.Interaction, button: discord.ui.Button):
+            await self.show(component_interaction, self.page + 1)
+
+        async def on_timeout(self):
+            for item in self.children:
+                item.disabled = True
+            try:
+                await interaction.edit_original_response(view=self)
+            except discord.HTTPException:
+                pass
+
+    await interaction.response.send_message(embed=pages[0], view=HelpView(), ephemeral=True)
+
 
 
 @tree.command(name="ping", description="Affiche la latence du bot")
@@ -2256,7 +2320,14 @@ async def on_message(message: discord.Message):
         embed.add_field(name="Fonctionnalités", value=("🎫 Système de tickets\n🔨 Modération complète\n🤖 Auto-modération\n🛡️ Whitelist & Blacklist\n🎮 Mini-jeux"), inline=True)
         embed.set_thumbnail(url=bot.user.display_avatar.url)
         embed.set_footer(text=f"Bot Discord • Sur {len(bot.guilds)} serveur(s)")
-        await message.reply(embed=embed, mention_author=False)
+        view = discord.ui.View(timeout=None)
+        view.add_item(discord.ui.Button(
+            label="Ajouter le bot",
+            emoji="<:love:1486416128254152826>",
+            style=discord.ButtonStyle.link,
+            url="https://discord.com/oauth2/authorize?client_id=1418660039975239773",
+        ))
+        await message.reply(embed=embed, view=view, mention_author=False)
         return
 
     cfg       = get_guild_config(message.guild.id)
