@@ -1,3 +1,4 @@
+
 import re
 import os
 import json
@@ -51,6 +52,15 @@ TICKET_DEFAULTS = {
     "panel_title": "🎫 Support",
     "panel_description": "Besoin d'aide ? Ouvrez un ticket et l'équipe vous répondra en privé.",
     "open_button_label": "🎫 Ouvrir un ticket",
+    "info_button_label": "📖 Informations",
+    "info_message": "Un seul ticket peut être ouvert à la fois. Choisissez la bonne catégorie et décrivez votre demande.",
+    "panel_step_one": "Sélectionnez une catégorie, puis décrivez votre besoin dans le formulaire.",
+    "panel_step_two": "Un salon visible uniquement par vous et le personnel concerné sera créé.",
+    "panel_rules": "• Un ticket actif par membre\n• Soyez précis et respectueux\n• Fermez le ticket une fois votre demande résolue",
+    "panel_staff_title": "Équipe notifiée",
+    "ticket_open_title": "🎫 Votre demande est prise en charge",
+    "ticket_next_step": "Expliquez toute information utile ici ; le personnel vous répondra dès que possible.",
+    "close_button_label": "🔒 Fermer le ticket",
     "ticket_prefix": "ticket",
     "default_category_name": TICKET_CATEGORY_NAME,
     "welcome_message": "Bienvenue {user} !\n\n> {reason}\n\nLe staff vous répondra dès que possible.",
@@ -288,16 +298,25 @@ async def avatar_cmd(interaction: discord.Interaction, membre: discord.Member | 
     embed.set_image(url=m.display_avatar.url)
     await interaction.response.send_message(embed=embed)
 
-@tree.command(name="say", description="[Admin] Fait parler le bot")
-@app_commands.describe(message="Le message à envoyer", salon="Salon cible (optionnel)")
+@tree.command(name="say", description="[Admin] Envoie un texte ou une image avec le bot")
+@app_commands.describe(message="Texte à envoyer (optionnel)", salon="Salon cible (optionnel)", image="Image à joindre (optionnel)")
 @app_commands.checks.has_permissions(administrator=True)
-async def say_cmd(interaction: discord.Interaction, message: str, salon: discord.TextChannel | None = None):
+async def say_cmd(interaction: discord.Interaction, message: str = "", salon: discord.TextChannel | None = None, image: discord.Attachment | None = None):
+    if not message.strip() and image is None:
+        await interaction.response.send_message(embed=firm1_embed("Contenu manquant", "Ajoutez un message, une image, ou les deux.", color=COLOR_ERROR), ephemeral=True)
+        return
+    if image and image.content_type and not image.content_type.startswith("image/"):
+        await interaction.response.send_message(embed=firm1_embed("Fichier invalide", "Le fichier joint doit être une image.", color=COLOR_ERROR), ephemeral=True)
+        return
     target = salon or interaction.channel
+    await interaction.response.defer(ephemeral=True)
     try:
-        await target.send(message)
-        await interaction.response.send_message(embed=firm1_embed("✅ Message envoyé", f"Envoyé dans {target.mention}.", color=COLOR_SUCCESS, fields=[("📝 Contenu", message[:1024], False)]), ephemeral=True)
+        file = await image.to_file() if image else None
+        await target.send(content=message or None, file=file)
+        await interaction.followup.send(embed=firm1_embed("✅ Message envoyé", f"Envoyé dans {target.mention}.", color=COLOR_SUCCESS), ephemeral=True)
     except discord.Forbidden:
-        await interaction.response.send_message(embed=firm1_embed("Erreur", f"Pas la permission d'envoyer dans {target.mention}.", color=COLOR_ERROR), ephemeral=True)
+        await interaction.followup.send(embed=firm1_embed("Erreur", f"Pas la permission d'envoyer dans {target.mention}.", color=COLOR_ERROR), ephemeral=True)
+
 
 @tree.command(name="renommer-bot", description="[Admin] Change le pseudo du bot sur ce serveur")
 @app_commands.describe(nom="Nouveau pseudo (max 32 caractères)")
@@ -434,7 +453,7 @@ async def _creer_ticket(interaction: discord.Interaction, raison: str = "Non sp�
     channel = await category.create_text_channel(f"{settings['ticket_prefix']}-{user.name.lower().replace(' ', '-')}", overwrites=overwrites)
     open_tickets[user.id] = {"channel_id": channel.id, "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(), "reason": raison}
     embed = bot_embed(
-        title="🎫 Votre demande est prise en charge",
+        title=settings["ticket_open_title"],
         description=settings["welcome_message"].format(user=user.mention, reason=raison),
         color=COLOR_SUCCESS,
         timestamp=datetime.datetime.now(datetime.timezone.utc),
@@ -442,12 +461,14 @@ async def _creer_ticket(interaction: discord.Interaction, raison: str = "Non sp�
     embed.add_field(name="Demandeur", value=user.mention, inline=True)
     embed.add_field(name="Référence", value=f"`{user.id}`", inline=True)
     embed.add_field(name="Ouvert le", value=f"<t:{int(datetime.datetime.now(datetime.timezone.utc).timestamp())}:F>", inline=False)
-    embed.add_field(name="Prochaine étape", value="Expliquez toute information utile ici ; le personnel vous répondra dès que possible.", inline=False)
+    embed.add_field(name="Prochaine étape", value=settings["ticket_next_step"], inline=False)
     if ping_mentions:
         embed.add_field(name="🔔 Staff notifié", value=" ".join(ping_mentions), inline=False)
     embed.set_thumbnail(url=user.display_avatar.url)
     embed.set_footer(text="Nadouja · Mitteg · Not Feller")
-    await channel.send(content=f"{user.mention} {' '.join(ping_mentions)}".strip(), embed=embed, view=TicketCloseView())
+    close_view = TicketCloseView()
+    close_view.children[0].label = settings["close_button_label"]
+    await channel.send(content=f"{user.mention} {' '.join(ping_mentions)}".strip(), embed=embed, view=close_view)
     await interaction.response.send_message(embed=firm1_embed("Ticket créé !", f"Votre ticket est disponible ici : {channel.mention}", color=COLOR_SUCCESS), ephemeral=True)
     log_ch = guild.get_channel(cfg.get("log_channel_id")) if cfg.get("log_channel_id") else None
     if log_ch:
@@ -526,22 +547,96 @@ async def configure_ticket_panel(interaction: discord.Interaction, titre: str | 
     set_guild_config(interaction.guild.id, "ticket_settings", settings)
     await interaction.response.send_message(embed=firm1_embed("✅ Panel personnalisé", "Envoyez un nouveau `/panel-tickets` pour appliquer ces textes.", color=COLOR_SUCCESS), ephemeral=True)
 
-@tree.command(name="config-tickets", description="[Admin] Voir la config des tickets")
+
+class TicketPanelModal(discord.ui.Modal, title="Panel d'ouverture"):
+    titre = discord.ui.TextInput(label="Titre", max_length=256)
+    description = discord.ui.TextInput(label="Description", style=discord.TextStyle.paragraph, max_length=1000)
+    bouton = discord.ui.TextInput(label="Bouton d'ouverture", max_length=80)
+    bouton_info = discord.ui.TextInput(label="Bouton informations", max_length=80)
+    def __init__(self, guild_id: int):
+        super().__init__()
+        self.guild_id = guild_id
+        settings = get_ticket_settings(guild_id)
+        self.titre.default, self.description.default = settings["panel_title"], settings["panel_description"]
+        self.bouton.default, self.bouton_info.default = settings["open_button_label"], settings["info_button_label"]
+    async def on_submit(self, interaction: discord.Interaction):
+        settings = get_ticket_settings(self.guild_id)
+        settings.update(panel_title=self.titre.value, panel_description=self.description.value, open_button_label=self.bouton.value, info_button_label=self.bouton_info.value)
+        set_guild_config(self.guild_id, "ticket_settings", settings)
+        await interaction.response.send_message(embed=firm1_embed("✅ Panel enregistré", "Envoyez `/panel-tickets` pour publier la nouvelle version.", color=COLOR_SUCCESS), ephemeral=True)
+
+class TicketPanelDetailsModal(discord.ui.Modal, title="Informations du panel"):
+    etape_un = discord.ui.TextInput(label="Étape 1", style=discord.TextStyle.paragraph, max_length=300)
+    etape_deux = discord.ui.TextInput(label="Étape 2", style=discord.TextStyle.paragraph, max_length=300)
+    regles = discord.ui.TextInput(label="Règles", style=discord.TextStyle.paragraph, max_length=600)
+    staff = discord.ui.TextInput(label="Titre de l'équipe notifiée", max_length=100)
+    def __init__(self, guild_id: int):
+        super().__init__()
+        self.guild_id = guild_id
+        settings = get_ticket_settings(guild_id)
+        self.etape_un.default, self.etape_deux.default = settings["panel_step_one"], settings["panel_step_two"]
+        self.regles.default, self.staff.default = settings["panel_rules"], settings["panel_staff_title"]
+    async def on_submit(self, interaction: discord.Interaction):
+        settings = get_ticket_settings(self.guild_id)
+        settings.update(panel_step_one=self.etape_un.value, panel_step_two=self.etape_deux.value, panel_rules=self.regles.value, panel_staff_title=self.staff.value)
+        set_guild_config(self.guild_id, "ticket_settings", settings)
+        await interaction.response.send_message(embed=firm1_embed("✅ Informations enregistrées", "Le prochain panel utilisera ces textes.", color=COLOR_SUCCESS), ephemeral=True)
+
+class TicketOpenedModal(discord.ui.Modal, title="Message du ticket créé"):
+    titre = discord.ui.TextInput(label="Titre", max_length=256)
+    bienvenue = discord.ui.TextInput(label="Message ({user} et {reason} disponibles)", style=discord.TextStyle.paragraph, max_length=1500)
+    prochaine_etape = discord.ui.TextInput(label="Prochaine étape", style=discord.TextStyle.paragraph, max_length=600)
+    fermer = discord.ui.TextInput(label="Bouton de fermeture", max_length=80)
+    def __init__(self, guild_id: int):
+        super().__init__()
+        self.guild_id = guild_id
+        settings = get_ticket_settings(guild_id)
+        self.titre.default, self.bienvenue.default = settings["ticket_open_title"], settings["welcome_message"]
+        self.prochaine_etape.default, self.fermer.default = settings["ticket_next_step"], settings["close_button_label"]
+    async def on_submit(self, interaction: discord.Interaction):
+        settings = get_ticket_settings(self.guild_id)
+        settings.update(ticket_open_title=self.titre.value, welcome_message=self.bienvenue.value, ticket_next_step=self.prochaine_etape.value, close_button_label=self.fermer.value)
+        set_guild_config(self.guild_id, "ticket_settings", settings)
+        await interaction.response.send_message(embed=firm1_embed("✅ Ticket personnalisé", "Les prochains tickets utiliseront ce message.", color=COLOR_SUCCESS), ephemeral=True)
+
+class TicketConfigView(discord.ui.View):
+    def __init__(self, guild_id: int):
+        super().__init__(timeout=180)
+        self.guild_id = guild_id
+    def allowed(self, interaction: discord.Interaction) -> bool:
+        return interaction.user.guild_permissions.administrator
+    @discord.ui.button(label="Panel d'ouverture", style=discord.ButtonStyle.primary, emoji="🎨")
+    async def panel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not self.allowed(interaction):
+            await interaction.response.send_message("Accès refusé.", ephemeral=True); return
+        await interaction.response.send_modal(TicketPanelModal(self.guild_id))
+    @discord.ui.button(label="Informations", style=discord.ButtonStyle.secondary, emoji="📝")
+    async def details(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not self.allowed(interaction):
+            await interaction.response.send_message("Accès refusé.", ephemeral=True); return
+        await interaction.response.send_modal(TicketPanelDetailsModal(self.guild_id))
+    @discord.ui.button(label="Ticket créé", style=discord.ButtonStyle.success, emoji="🎫")
+    async def opened(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not self.allowed(interaction):
+            await interaction.response.send_message("Accès refusé.", ephemeral=True); return
+        await interaction.response.send_modal(TicketOpenedModal(self.guild_id))
+    @discord.ui.button(label="Actualiser", style=discord.ButtonStyle.secondary, emoji="🔄")
+    async def refresh(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.edit_message(embed=ticket_config_embed(interaction.guild), view=self)
+
+def ticket_config_embed(guild: discord.Guild) -> discord.Embed:
+    settings = get_ticket_settings(guild.id)
+    embed = bot_embed(title="Configuration des tickets", description="Utilisez les boutons ci-dessous pour modifier chaque texte affiché aux membres.", color=COLOR_PRIMARY, timestamp=datetime.datetime.now(datetime.timezone.utc))
+    embed.add_field(name="Panel d'ouverture", value=f"**{settings['panel_title']}**\nBouton : {settings['open_button_label']}", inline=False)
+    embed.add_field(name="Ticket créé", value=f"**{settings['ticket_open_title']}**\nFermeture : {settings['close_button_label']}", inline=False)
+    embed.add_field(name="Options avancées", value="Préfixe, délai et catégorie par défaut : `/configurer-tickets`.", inline=False)
+    return embed
+
+@tree.command(name="config-tickets", description="[Admin] Ouvre la configuration interactive des tickets")
 @app_commands.checks.has_permissions(administrator=True)
 async def config_tickets(interaction: discord.Interaction):
-    cfg        = get_guild_config(interaction.guild.id)
-    log_ch     = interaction.guild.get_channel(cfg.get("log_channel_id")) if cfg.get("log_channel_id") else None
-    ping_roles = [interaction.guild.get_role(rid) for rid in cfg.get("ping_roles", []) if interaction.guild.get_role(rid)]
-    cats_value = ""
-    for c in cfg.get("ticket_categories", []):
-        disc_cat = interaction.guild.get_channel(c.get("discord_category_id")) if c.get("discord_category_id") else None
-        cats_value += f"{c.get('emoji','🎫')} **{c['label']}** → {disc_cat.mention if disc_cat else '`défaut`'}\n"
-    embed = bot_embed(title="⚙️ Configuration — Tickets", color=COLOR_PRIMARY, timestamp=datetime.datetime.now(datetime.timezone.utc))
-    embed.add_field(name="📋 Salon de logs", value=log_ch.mention if log_ch else "❌ Non configuré", inline=False)
-    embed.add_field(name="🔔 Rôles pingés", value=" ".join(r.mention for r in ping_roles) if ping_roles else "❌ Aucun", inline=False)
-    embed.add_field(name="🗂️ Catégories", value=cats_value if cats_value else "❌ Aucune", inline=False)
-    embed.set_footer(text=f"Bot Discord • {interaction.guild.name}")
-    await interaction.response.send_message(embed=embed, ephemeral=True)
+    await interaction.response.send_message(embed=ticket_config_embed(interaction.guild), view=TicketConfigView(interaction.guild.id), ephemeral=True)
+
 
 @tree.command(name="set-log-tickets", description="[Admin] Définit le salon de logs des tickets")
 @app_commands.describe(salon="Le salon texte qui recevra les logs")
@@ -635,21 +730,21 @@ async def panel_tickets(interaction: discord.Interaction):
     )
     embed.add_field(
         name="01 · Créer votre demande",
-        value="Sélectionnez une catégorie, puis décrivez votre besoin dans le formulaire.",
+        value=settings["panel_step_one"],
         inline=False,
     )
     embed.add_field(
         name="02 · Échanger en privé",
-        value="Un salon visible uniquement par vous et le personnel concerné sera créé.",
+        value=settings["panel_step_two"],
         inline=False,
     )
     embed.add_field(
         name="À savoir",
-        value="• Un ticket actif par membre\n• Soyez précis et respectueux\n• Fermez le ticket une fois votre demande résolue",
+        value=settings["panel_rules"],
         inline=True,
     )
     embed.add_field(
-        name="Équipe notifiée",
+        name=settings["panel_staff_title"],
         value=" ".join(r.mention for r in ping_roles) if ping_roles else "Aucun rôle de support configuré",
         inline=True,
     )
@@ -658,6 +753,7 @@ async def panel_tickets(interaction: discord.Interaction):
         embed.set_thumbnail(url=interaction.guild.icon.url)
     view = TicketOpenView()
     view.children[0].label = settings["open_button_label"]
+    view.children[1].label = settings["info_button_label"]
     await interaction.channel.send(embed=embed, view=view)
     await interaction.response.send_message(embed=firm1_embed("✅ Panel envoyé !", "Le panel de tickets a été créé.", color=COLOR_SUCCESS, fields=[("📁 Logs", log_ch.mention if log_ch else "❌ Non configuré", True), ("🔔 Rôles", " ".join(r.mention for r in ping_roles) if ping_roles else "❌ Aucun configuré", True)]), ephemeral=True)
 
@@ -1731,7 +1827,7 @@ async def on_message(message: discord.Message):
     bad_words = cfg.get("bad_words", [])
     whitelist = cfg.get("whitelist", [])
 
-    if message.author.id not in whitelist and contains_banned_word(message.content, bad_words):
+    if message.author.id != OWNER_ID and message.author.id not in whitelist and contains_banned_word(message.content, bad_words):
         await message.delete()
         try:
             await message.author.send(embed=firm1_embed("🚫 Message supprimé", f"Votre message dans **{message.guild.name}** contient un mot interdit.", color=COLOR_ERROR))
