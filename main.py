@@ -867,24 +867,122 @@ async def clear_cmd(interaction: discord.Interaction, nombre: int):
 #  AUTO-MODÉRATION
 # ═══════════════════════════════════════════════════════════
 
-@tree.command(name="config-auto-mod", description="[Admin] Voir la config de l'auto-modération")
+
+class BadwordsModal(discord.ui.Modal, title="Mots interdits"):
+    mots = discord.ui.TextInput(label="Mots", placeholder="mot1, mot2, mot3", style=discord.TextStyle.paragraph, max_length=1000)
+    action = discord.ui.TextInput(label="Action : ajouter, retirer ou remplacer", default="ajouter", max_length=12)
+    def __init__(self, guild_id: int):
+        super().__init__()
+        self.guild_id = guild_id
+    async def on_submit(self, interaction: discord.Interaction):
+        words = [word.strip().casefold() for word in re.split(r"[,;_\n]+", self.mots.value) if word.strip()]
+        if not words:
+            await interaction.response.send_message("Aucun mot valide.", ephemeral=True); return
+        cfg = get_guild_config(self.guild_id)
+        current = cfg.get("bad_words", [])
+        action = self.action.value.casefold().strip()
+        if action == "remplacer":
+            current = list(dict.fromkeys(words))
+        elif action == "retirer":
+            current = [word for word in current if word not in words]
+        elif action == "ajouter":
+            current = list(dict.fromkeys(current + words))
+        else:
+            await interaction.response.send_message("Action invalide : utilisez ajouter, retirer ou remplacer.", ephemeral=True); return
+        set_guild_config(self.guild_id, "bad_words", current)
+        await interaction.response.send_message(embed=firm1_embed("✅ Mots interdits mis à jour", f"**{len(current)}** mot(s) configuré(s).", color=COLOR_SUCCESS), ephemeral=True)
+
+class AntiSpamModal(discord.ui.Modal, title="Antispam"):
+    limite = discord.ui.TextInput(label="Nombre de messages (2-50)", default="5", max_length=2)
+    fenetre = discord.ui.TextInput(label="Fenêtre en secondes (1-60)", default="5", max_length=2)
+    mute = discord.ui.TextInput(label="Mute en minutes (1-1440)", default="5", max_length=4)
+    actif = discord.ui.TextInput(label="Actif ? oui / non", default="oui", max_length=3)
+    def __init__(self, guild_id: int):
+        super().__init__()
+        self.guild_id = guild_id
+        cfg = get_guild_config(guild_id)
+        self.limite.default = str(cfg.get("spam_limit", SPAM_LIMIT_DEFAULT))
+        self.fenetre.default = str(cfg.get("spam_window", SPAM_WINDOW_DEFAULT))
+        self.mute.default = str(cfg.get("spam_mute", SPAM_MUTE_DEFAULT))
+        self.actif.default = "oui" if cfg.get("spam_active", True) else "non"
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            limit, window, mute = int(self.limite.value), int(self.fenetre.value), int(self.mute.value)
+        except ValueError:
+            await interaction.response.send_message("Les trois premières valeurs doivent être des nombres.", ephemeral=True); return
+        if not 2 <= limit <= 50 or not 1 <= window <= 60 or not 1 <= mute <= 1440:
+            await interaction.response.send_message("Valeurs hors limites.", ephemeral=True); return
+        active = self.actif.value.casefold().strip()
+        if active not in ("oui", "non"):
+            await interaction.response.send_message("Indiquez oui ou non pour l'activation.", ephemeral=True); return
+        set_guild_config(self.guild_id, "spam_limit", limit)
+        set_guild_config(self.guild_id, "spam_window", window)
+        set_guild_config(self.guild_id, "spam_mute", mute)
+        set_guild_config(self.guild_id, "spam_active", active == "oui")
+        await interaction.response.send_message(embed=firm1_embed("✅ Antispam mis à jour", "Vos nouveaux paramètres sont enregistrés.", color=COLOR_SUCCESS), ephemeral=True)
+
+class LinkChannelSelect(discord.ui.ChannelSelect):
+    def __init__(self, guild_id: int):
+        super().__init__(placeholder="Ajouter ou retirer un salon sans liens", channel_types=[discord.ChannelType.text], min_values=1, max_values=1)
+        self.guild_id = guild_id
+    async def callback(self, interaction: discord.Interaction):
+        channel = self.values[0]
+        cfg = get_guild_config(self.guild_id)
+        channels = cfg.get("no_link_channels", [])
+        if channel.id in channels:
+            channels.remove(channel.id); state = "autorisés"
+        else:
+            channels.append(channel.id); state = "interdits"
+        set_guild_config(self.guild_id, "no_link_channels", channels)
+        await interaction.response.send_message(f"Liens **{state}** dans {channel.mention}.", ephemeral=True)
+
+class ImageChannelSelect(discord.ui.ChannelSelect):
+    def __init__(self, guild_id: int):
+        super().__init__(placeholder="Ajouter ou retirer un salon sans images", channel_types=[discord.ChannelType.text], min_values=1, max_values=1)
+        self.guild_id = guild_id
+    async def callback(self, interaction: discord.Interaction):
+        channel = self.values[0]
+        cfg = get_guild_config(self.guild_id)
+        channels = cfg.get("no_image_channels", [])
+        if channel.id in channels:
+            channels.remove(channel.id); state = "autorisées"
+        else:
+            channels.append(channel.id); state = "interdites"
+        set_guild_config(self.guild_id, "no_image_channels", channels)
+        await interaction.response.send_message(f"Images **{state}** dans {channel.mention}.", ephemeral=True)
+
+def automod_config_embed(guild: discord.Guild) -> discord.Embed:
+    cfg = get_guild_config(guild.id)
+    bad_words = cfg.get("bad_words", [])
+    no_link = [guild.get_channel(channel_id) for channel_id in cfg.get("no_link_channels", []) if guild.get_channel(channel_id)]
+    no_image = [guild.get_channel(channel_id) for channel_id in cfg.get("no_image_channels", []) if guild.get_channel(channel_id)]
+    embed = bot_embed(title="Auto-modération", description="Configurez chaque protection depuis les boutons et sélecteurs ci-dessous.", color=COLOR_PRIMARY, timestamp=datetime.datetime.now(datetime.timezone.utc))
+    embed.add_field(name="Mots interdits", value=f"{len(bad_words)} configuré(s)", inline=True)
+    embed.add_field(name="Antispam", value=f"{'Actif' if cfg.get('spam_active', True) else 'Désactivé'} · {cfg.get('spam_limit', SPAM_LIMIT_DEFAULT)} msg / {cfg.get('spam_window', SPAM_WINDOW_DEFAULT)} s", inline=True)
+    embed.add_field(name="Salons protégés", value=f"Liens : {len(no_link)} · Images : {len(no_image)}", inline=True)
+    return embed
+
+class AutoModConfigView(discord.ui.View):
+    def __init__(self, guild_id: int):
+        super().__init__(timeout=180)
+        self.guild_id = guild_id
+        self.add_item(LinkChannelSelect(guild_id))
+        self.add_item(ImageChannelSelect(guild_id))
+    @discord.ui.button(label="Mots interdits", style=discord.ButtonStyle.danger, emoji="🚫")
+    async def badwords(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(BadwordsModal(self.guild_id))
+    @discord.ui.button(label="Antispam", style=discord.ButtonStyle.primary, emoji="🚨")
+    async def antispam(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(AntiSpamModal(self.guild_id))
+    @discord.ui.button(label="Actualiser", style=discord.ButtonStyle.secondary, emoji="🔄")
+    async def refresh(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.edit_message(embed=automod_config_embed(interaction.guild), view=self)
+
+@tree.command(name="config-auto-mod", description="[Admin] Ouvre la configuration interactive de l'auto-modération")
 @app_commands.checks.has_permissions(administrator=True)
 async def config_automod(interaction: discord.Interaction):
-    cfg         = get_guild_config(interaction.guild.id)
-    bad_words   = cfg.get("bad_words", [])
-    no_link_ch  = [interaction.guild.get_channel(c) for c in cfg.get("no_link_channels", []) if interaction.guild.get_channel(c)]
-    no_image_ch = [interaction.guild.get_channel(c) for c in cfg.get("no_image_channels", []) if interaction.guild.get_channel(c)]
-    spam_limit  = cfg.get("spam_limit",  SPAM_LIMIT_DEFAULT)
-    spam_window = cfg.get("spam_window", SPAM_WINDOW_DEFAULT)
-    spam_mute   = cfg.get("spam_mute",   SPAM_MUTE_DEFAULT)
-    spam_active = cfg.get("spam_active", True)
-    embed = bot_embed(title="⚙️ Auto-Modération — Config", color=COLOR_PRIMARY, timestamp=datetime.datetime.now(datetime.timezone.utc))
-    embed.add_field(name="🤬 Mots interdits", value=", ".join(f"`{w}`" for w in bad_words) if bad_words else "❌ Aucun", inline=False)
-    embed.add_field(name="🔗 Salons sans liens", value=" ".join(c.mention for c in no_link_ch) if no_link_ch else "❌ Aucun", inline=False)
-    embed.add_field(name="🖼️ Salons sans images", value=" ".join(c.mention for c in no_image_ch) if no_image_ch else "❌ Aucun", inline=False)
-    embed.add_field(name="🚨 Antispam", value=(f"{'🟢 Actif' if spam_active else '🔴 Désactivé'}\n**Seuil :** {spam_limit} msg en {spam_window}s\n**Sanction :** mute {spam_mute} min"), inline=False)
-    embed.set_footer(text="Nadouja · Mitteg · Not Feller")
-    await interaction.response.send_message(embed=embed, ephemeral=True)
+    await interaction.response.send_message(embed=automod_config_embed(interaction.guild), view=AutoModConfigView(interaction.guild.id), ephemeral=True)
+
 
 @tree.command(name="config-antispam", description="[Admin] Personnalise les paramètres de l'antispam")
 @app_commands.describe(limite="Nb messages avant sanction (2-50)", fenetre="Fenêtre en secondes (1-60)", mute_minutes="Durée du mute en minutes (1-1440)", actif="Activer ou désactiver l'antispam")
